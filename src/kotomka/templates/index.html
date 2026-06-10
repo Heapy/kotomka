@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Kotomka · New job{% endblock %}
+{% block content %}
+<section class="tool-shell">
+  <div class="panel intro-panel">
+    <h1>Video to Presentation</h1>
+    <p class="muted">Local pipeline for a timestamped report, key frames, transcript, and PDF.</p>
+  </div>
+
+  <form class="panel job-form" method="post" action="/jobs">
+    <label>
+      <span>Video URL</span>
+      <input name="source_url" type="url" required placeholder="https://www.youtube.com/watch?v=...">
+    </label>
+
+    <div class="grid-2">
+      <label>
+        <span>Report language</span>
+        <select name="output_language">
+          <option value="ru">Русский</option>
+          <option value="en">English</option>
+          <option value="same">Same as video</option>
+        </select>
+      </label>
+      <label>
+        <span>Cookies browser</span>
+        <input name="cookies_from_browser" placeholder="chrome, firefox, safari">
+      </label>
+    </div>
+
+    <details>
+      <summary>Providers</summary>
+      <div class="grid-2 provider-grid">
+        <label>
+          <span>STT</span>
+          <select name="stt_provider">
+            {% for provider in stt_providers %}
+              <option value="{{ provider }}" {% if provider == default_stt %}selected{% endif %}>{{ provider }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>LLM / Vision</span>
+          <select name="llm_provider">
+            {% for provider in llm_providers %}
+              <option value="{{ provider }}" {% if provider == default_llm %}selected{% endif %}>{{ provider }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </details>
+
+    <button class="primary-button" type="submit">
+      <span aria-hidden="true">▶</span>
+      <span>Start</span>
+    </button>
+  </form>
+</section>
+{% endblock %}
+

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Kotomka · Jobs{% endblock %}
+{% block content %}
+<section class="jobs-layout">
+  <div class="panel jobs-header">
+    <div>
+      <p class="eyebrow">History</p>
+      <h1>Jobs</h1>
+    </div>
+    <a class="primary-button" href="/">New job</a>
+  </div>
+
+  <div class="panel jobs-table-panel">
+    {% if rows %}
+      <table class="jobs-table">
+        <thead>
+          <tr>
+            <th>Job</th>
+            <th>Source</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Updated</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            {% set job = row.job %}
+            <tr>
+              <td><a href="{{ url_for('job_report', job_id=job.id) }}">{{ job.id }}</a></td>
+              <td class="source-cell">
+                <a href="{{ url_for('job_report', job_id=job.id) }}">{{ row.title }}</a>
+                {% if job.error %}
+                  <span class="row-error">{{ job.error }}</span>
+                {% endif %}
+              </td>
+              <td><span class="status-pill status-{{ job.status }}">{{ job.status }}</span></td>
+              <td>
+                <div class="mini-progress-track">
+                  <div class="mini-progress-bar" style="width: {{ job.progress }}%"></div>
+                </div>
+              </td>
+              <td>{{ job.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
+              <td>
+                {% if job.status in ["completed", "failed"] %}
+                  <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
+                    <button class="danger-button" type="submit">Delete</button>
+                  </form>
+                {% else %}
+                  <span class="muted">Active</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="muted">No jobs yet.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Kotomka · Job {{ job.id }}{% endblock %}
+{% block content %}
+<section class="status-layout" data-job-id="{{ job.id }}">
+  <div class="panel">
+    <div class="status-header">
+      <div>
+        <p class="eyebrow">Job {{ job.id }}</p>
+        <h1 id="job-message">{{ job.message }}</h1>
+      </div>
+      <span id="job-status" class="status-pill status-{{ job.status }}">{{ job.status }}</span>
+    </div>
+    <div class="progress-track">
+      <div id="job-progress" class="progress-bar" style="width: {{ job.progress }}%"></div>
+    </div>
+    <p id="job-error" class="error-text">{% if job.error %}{{ job.error }}{% endif %}</p>
+    {% if job.status == "failed" %}
+      <div class="button-row">
+        <form method="post" action="{{ url_for('job_retry', job_id=job.id) }}">
+          <button class="secondary-button" type="submit">Retry same settings</button>
+        </form>
+        <form method="post" action="{{ url_for('job_retry', job_id=job.id) }}">
+          <input type="hidden" name="use_current_defaults" value="true">
+          <button class="primary-button" type="submit">Retry current defaults</button>
+        </form>
+      </div>
+    {% endif %}
+    {% if job.status in ["completed", "failed"] %}
+      <form class="delete-form" method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
+        <button class="danger-button" type="submit">Delete job</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  const jobId = document.querySelector("[data-job-id]").dataset.jobId;
+  const statusEl = document.getElementById("job-status");
+  const messageEl = document.getElementById("job-message");
+  const progressEl = document.getElementById("job-progress");
+  const errorEl = document.getElementById("job-error");
+
+  async function pollJob() {
+    const response = await fetch(`/api/jobs/${jobId}`);
+    if (!response.ok) return;
+    const job = await response.json();
+    statusEl.textContent = job.status;
+    statusEl.className = `status-pill status-${job.status}`;
+    messageEl.textContent = job.message;
+    progressEl.style.width = `${job.progress}%`;
+    errorEl.textContent = job.error || "";
+    if (job.status === "completed") window.location.reload();
+    if (job.status === "failed") clearInterval(timer);
+  }
+  const timer = setInterval(pollJob, 1500);
+</script>
+{% endblock %}

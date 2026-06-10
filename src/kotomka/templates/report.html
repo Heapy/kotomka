@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ report.video.title }} · Kotomka{% endblock %}
+{% block content %}
+<article class="report">
+  <header class="report-header">
+    <div>
+      <p class="eyebrow">{{ report.video.uploader or "Video" }} · {{ report.video.duration_s | timecode }}</p>
+      <h1>{{ report.video.title }}</h1>
+    </div>
+    <div class="button-row">
+      <form method="post" action="{{ url_for('job_retry', job_id=job.id) }}">
+        <input type="hidden" name="use_current_defaults" value="true">
+        <button class="secondary-button" type="submit">Reprocess</button>
+      </form>
+      <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
+        <button class="danger-button" type="submit">Delete</button>
+      </form>
+      <a class="primary-button" href="{{ url_for('job_pdf', job_id=job.id) }}?force=1">
+        <span aria-hidden="true">⬇</span>
+        <span>PDF</span>
+      </a>
+    </div>
+  </header>
+
+  <section class="report-band">
+    <h2>Summary</h2>
+    <p class="summary">{{ citation_links(report.summary, report.video.webpage_url or report.video.source_url) }}</p>
+  </section>
+
+  <section class="report-band">
+    <h2>Detailed Notes</h2>
+    {% for section in report.sections %}
+      <section class="note-section">
+        <div class="section-title-row">
+          <h3>{{ section.title }}</h3>
+          <a class="time-link" href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, section.start_s) }}">{{ section.start_s | timecode }}</a>
+        </div>
+        <p>{{ citation_links(section.body, report.video.webpage_url or report.video.source_url) }}</p>
+        {% set frame_ids = section.frame_ids %}
+        {% if frame_ids %}
+          <div class="frame-row">
+            {% for frame in report.frames if frame.frame_id in frame_ids %}
+              <figure class="frame-figure">
+                <img src="{{ url_for('job_asset', job_id=job.id, asset_path='frames/' ~ frame.image_path) }}" alt="{{ frame.caption }}">
+                <figcaption>
+                  <a href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, frame.timestamp_s) }}">{{ frame.timestamp_s | timecode }}</a>
+                  {{ frame.caption }}
+                </figcaption>
+              </figure>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </section>
+
+  <section class="report-band">
+    <h2>Key Frames</h2>
+    <div class="frame-grid">
+      {% for frame in report.frames %}
+        <figure class="frame-figure">
+          <img src="{{ url_for('job_asset', job_id=job.id, asset_path='frames/' ~ frame.image_path) }}" alt="{{ frame.caption }}">
+          <figcaption>
+            <a href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, frame.timestamp_s) }}">{{ frame.timestamp_s | timecode }}</a>
+            {{ frame.caption }}
+          </figcaption>
+        </figure>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="report-band">
+    <h2>Full Transcript</h2>
+    <div class="transcript">
+      {% for segment in report.transcript.segments %}
+        <div class="transcript-row">
+          <a class="time-link" href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, segment.start_s) }}">{{ segment.start_s | timecode }}</a>
+          <strong>{{ segment.speaker }}</strong>
+          <p>{{ segment.text }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+</article>
+{% endblock %}

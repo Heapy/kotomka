@@ -1,0 +1,439 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f7f8;
+  --ink: #16191d;
+  --muted: #68707a;
+  --line: #d7dde3;
+  --panel: #ffffff;
+  --accent: #1769aa;
+  --accent-dark: #0f4f82;
+  --danger: #b42318;
+  --ok: #137a4b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+a {
+  color: var(--accent);
+}
+
+.topbar {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.brand {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.topnav {
+  display: flex;
+  gap: 14px;
+}
+
+.topnav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+.tool-shell,
+.status-layout,
+.jobs-layout {
+  display: grid;
+  gap: 16px;
+}
+
+.panel,
+.report-band {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.intro-panel h1,
+.status-header h1,
+.report-header h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.04;
+  letter-spacing: 0;
+}
+
+.muted,
+.eyebrow {
+  color: var(--muted);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.job-form {
+  display: grid;
+  gap: 18px;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.provider-grid {
+  margin-top: 14px;
+}
+
+.primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 16px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #f0b4ad;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--danger);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.danger-button:hover {
+  background: #fff4f2;
+}
+
+.delete-form {
+  margin-top: 14px;
+}
+
+.primary-button:hover {
+  background: var(--accent-dark);
+}
+
+.status-header,
+.report-header,
+.section-title-row,
+.jobs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.status-pill {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #e8edf3;
+}
+
+.status-completed {
+  color: var(--ok);
+}
+
+.status-failed {
+  color: var(--danger);
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  margin-top: 20px;
+  border-radius: 999px;
+  background: #e6ebf0;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+.report {
+  display: grid;
+  gap: 18px;
+}
+
+.report-header {
+  align-items: center;
+}
+
+.report-band h2,
+.note-section h3 {
+  margin: 0 0 12px;
+}
+
+.summary {
+  max-width: 78ch;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.note-section {
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.note-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.note-section p,
+.transcript-row p {
+  line-height: 1.6;
+}
+
+.time-link {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.frame-row,
+.frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.frame-figure {
+  margin: 0;
+}
+
+.frame-figure img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #eef2f5;
+}
+
+.frame-figure figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.transcript {
+  display: grid;
+  gap: 12px;
+}
+
+.transcript-row {
+  display: grid;
+  grid-template-columns: 72px 120px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.transcript-row p {
+  margin: 0;
+}
+
+.jobs-table-panel {
+  overflow-x: auto;
+}
+
+.jobs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.jobs-table th,
+.jobs-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.jobs-table th {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.source-cell {
+  min-width: 320px;
+}
+
+.source-cell > a {
+  display: block;
+  max-width: 560px;
+  color: var(--ink);
+  font-weight: 650;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.row-error {
+  display: block;
+  max-width: 560px;
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mini-progress-track {
+  width: 120px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6ebf0;
+}
+
+.mini-progress-bar {
+  height: 100%;
+  background: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .grid-2,
+  .transcript-row {
+    grid-template-columns: 1fr;
+  }
+
+  .status-header,
+  .report-header,
+  .section-title-row,
+  .jobs-header {
+    display: grid;
+  }
+
+  .page {
+    padding: 18px 12px 40px;
+  }
+}
+
+@media print {
+  .topbar,
+  .primary-button {
+    display: none;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+
+  .panel,
+  .report-band {
+    border: 0;
+  }
+}
