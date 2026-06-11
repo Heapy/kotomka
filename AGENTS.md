@@ -22,6 +22,7 @@ Important modules:
 - `src/kotomka/source.py`: YouTube/yt-dlp and local file source providers.
 - `src/kotomka/media.py`: ffmpeg audio/frame extraction and perceptual-hash dedupe.
 - `src/kotomka/models.py`: normalized schemas for jobs, transcript, frames, and reports.
+  `VideoMetadata` carries yt-dlp metadata (description, tags, upload date, language, channel, chapters) used by STT keyterms, report grounding, and frame selection.
 - `src/kotomka/providers/stt/`: `fake` and `assemblyai` STT providers.
 - `src/kotomka/providers/llm/`: `fake`, OpenAI Platform, and Codex subscription providers.
 - `src/kotomka/pdf.py`: PDF export; ReportLab is the default renderer.

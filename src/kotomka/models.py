@@ -50,6 +50,12 @@ class JobRecord(BaseModel):
     result: dict | None = None
 
 
+class Chapter(BaseModel):
+    title: str = ""
+    start_s: float = 0
+    end_s: float = 0
+
+
 class VideoMetadata(BaseModel):
     source_url: str
     title: str = "Untitled video"
@@ -57,6 +63,12 @@ class VideoMetadata(BaseModel):
     duration_s: float = 0
     uploader: str | None = None
     thumbnail_url: str | None = None
+    description: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    upload_date: str | None = None
+    language: str | None = None
+    channel: str | None = None
+    chapters: list[Chapter] = Field(default_factory=list)
 
 
 class SourceArtifact(BaseModel):
