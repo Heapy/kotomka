@@ -103,6 +103,20 @@ class JobWorker:
                 work_dir=job.artifact_dir,
             )
             report = normalize_report(report, tolerance_s=self.settings.citation_snap_tolerance_seconds)
+            if self.settings.assessment_enabled:
+                self.store.update_job(job_id, progress=90, message="Assessing report")
+                try:
+                    assessment = llm.assess_report(
+                        report=report,
+                        metadata=source.metadata,
+                        output_language=job.input.output_language,
+                    )
+                except Exception:
+                    # The report is complete and useful without an assessment.
+                    traceback.print_exc()
+                    assessment = None
+                if assessment is not None:
+                    report = report.model_copy(update={"assessment": assessment})
             report_path = job.artifact_dir / "report.json"
             save_report(report, report_path)
             self.store.update_job(

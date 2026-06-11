@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     report_chunk_target_seconds: int = 600
     transcript_excerpt_margin_seconds: int = 30
     transcript_low_confidence_threshold: float = 0.5
+    assessment_enabled: bool = True
+    assessment_web_search: bool = False
     codex_auth_file: Path = Field(
         default=Path("data/codex_subscription_auth.json"),
         validation_alias=AliasChoices("KOTOMKA_CODEX_AUTH_FILE", "CODEX_SUBSCRIPTION_AUTH_FILE"),

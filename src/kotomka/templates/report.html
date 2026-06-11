@@ -31,6 +31,38 @@
     <p class="summary">{{ citation_links(report.summary, report.video.webpage_url or report.video.source_url) }}</p>
   </section>
 
+  {% if report.assessment %}
+  <section class="report-band">
+    <h2>Assessment</h2>
+    {% set a = report.assessment %}
+    {% if a.verdict %}<p class="summary">{{ a.verdict }}</p>{% endif %}
+    <div class="assessment-scores">
+      <span class="score-chip">Originality {{ (a.originality_score * 100) | round | int }}%</span>
+      <span class="score-chip">Freshness {{ (a.freshness_score * 100) | round | int }}%</span>
+      {% if a.web_search_used %}<span class="score-chip score-chip-muted">web-checked</span>{% endif %}
+    </div>
+    {% if a.originality %}<p><strong>Originality.</strong> {{ a.originality }}</p>{% endif %}
+    {% if a.freshness %}<p><strong>Freshness.</strong> {{ a.freshness }}</p>{% endif %}
+    {% if a.audience %}<p><strong>Audience.</strong> {{ a.audience }}</p>{% endif %}
+    {% if a.prerequisites %}<p><strong>Prerequisites.</strong> {{ a.prerequisites | join(", ") }}</p>{% endif %}
+    {% if a.actionability %}<p><strong>Actionability.</strong> {{ a.actionability }}</p>{% endif %}
+    {% if a.insight_density %}<p><strong>Insight density.</strong> {{ a.insight_density }}</p>{% endif %}
+    {% if a.stale_claims %}
+      <h3 class="stale-claims-title">Claims to re-check</h3>
+      <ul class="stale-claims">
+        {% for flag in a.stale_claims %}
+          <li>
+            {% if flag.timestamp_s is not none %}
+              <a class="time-link" href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, flag.timestamp_s) }}">{{ flag.timestamp_s | timecode }}</a>
+            {% endif %}
+            {{ flag.claim }}{% if flag.risk %} — {{ flag.risk }}{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
   <section class="report-band">
     <h2>Detailed Notes</h2>
     {% for section in report.sections %}

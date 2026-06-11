@@ -162,6 +162,32 @@ def _write_reportlab_pdf(report: Report, output_path: Path) -> None:
     story.append(Paragraph(_p(report.summary), styles["KotomkaBody"]))
     story.append(Spacer(1, 6 * mm))
 
+    if report.assessment:
+        assessment = report.assessment
+        story.append(Paragraph("Assessment", styles["KotomkaH2"]))
+        if assessment.verdict:
+            story.append(Paragraph(_p(assessment.verdict), styles["KotomkaBody"]))
+        scores = f"Originality {assessment.originality_score:.0%} · Freshness {assessment.freshness_score:.0%}"
+        if assessment.web_search_used:
+            scores += " · web-checked"
+        story.append(Paragraph(_p(scores), styles["KotomkaMeta"]))
+        for label, value in (
+            ("Originality", assessment.originality),
+            ("Freshness", assessment.freshness),
+            ("Audience", assessment.audience),
+            ("Actionability", assessment.actionability),
+            ("Insight density", assessment.insight_density),
+        ):
+            if value:
+                story.append(Paragraph(_p(f"{label}. {value}"), styles["KotomkaBody"]))
+        if assessment.prerequisites:
+            story.append(Paragraph(_p("Prerequisites: " + ", ".join(assessment.prerequisites)), styles["KotomkaBody"]))
+        for flag in assessment.stale_claims:
+            prefix = f"{format_timecode(flag.timestamp_s)} · " if flag.timestamp_s is not None else ""
+            suffix = f" — {flag.risk}" if flag.risk else ""
+            story.append(Paragraph(_p(f"Re-check: {prefix}{flag.claim}{suffix}"), styles["KotomkaMeta"]))
+        story.append(Spacer(1, 6 * mm))
+
     frames_by_id = {frame.frame_id: frame for frame in report.frames}
     story.append(Paragraph("Detailed Notes", styles["KotomkaH2"]))
     for section in report.sections:

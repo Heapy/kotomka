@@ -18,7 +18,12 @@ Main flow:
    to real speaker names, which are applied to the report's embedded transcript copy
    (`transcript.json` keeps the raw labels and word-level data; the report copy drops words).
 6. `normalize_report` deterministically snaps citation timestamps to transcript segments, clamps out-of-range values, and drops unknown frame references before the report is saved.
-7. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
+7. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the finished report:
+   originality, freshness anchored to the upload date (with stale-claim flags), audience,
+   actionability, insight density, and a verdict. `KOTOMKA_ASSESSMENT_WEB_SEARCH=1` adds the
+   OpenAI web_search tool to this call; the Codex transport has no tools support and silently
+   ignores the flag. Assessment failures never fail the job.
+8. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 
 Important modules:
 

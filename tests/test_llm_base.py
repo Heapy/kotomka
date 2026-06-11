@@ -255,6 +255,70 @@ def test_build_report_tolerates_failed_notes_chunk(tmp_path: Path, monkeypatch) 
     assert saved_notes[0]["chunk_summary"] == ""
 
 
+ASSESSMENT_PAYLOAD = {
+    "originality_score": 0.8,
+    "originality": "Mostly first-hand experience.",
+    "freshness_score": 0.6,
+    "freshness": "Anchored to the upload date.",
+    "stale_claims": [
+        {"claim": "Uses v1 API", "timestamp_s": 12.0, "risk": "v2 is out", "confidence": 0.9},
+        {"claim": "", "timestamp_s": None, "risk": "", "confidence": 0.1},
+    ],
+    "audience": "Backend developers.",
+    "prerequisites": ["SQL basics", ""],
+    "actionability": "Directly applicable.",
+    "insight_density": "Dense.",
+    "verdict": "Report replaces watching.",
+}
+
+
+def make_report() -> Any:
+    stub = StubJsonLlm([{"summary": "s", "sections": [], "speaker_names": []}])
+    return stub.build_report(
+        source=make_source(),
+        transcript=make_transcript(),
+        frames=[],
+        output_language="ru",
+    )
+
+
+def test_assess_report_sends_report_not_transcript() -> None:
+    report = make_report()
+    stub = StubJsonLlm([ASSESSMENT_PAYLOAD])
+    assessment = stub.assess_report(report=report, metadata=make_source().metadata, output_language="ru")
+
+    call = stub.calls[0]
+    assert call["schema_name"] == "report_assessment"
+    assert "intro words" not in call["text"]  # transcript stays out of the assessment input
+    assert "today" in call["text"]
+    assert call.get("tools") is None
+    assert assessment is not None
+    assert assessment.originality_score == 0.8
+    assert [flag.claim for flag in assessment.stale_claims] == ["Uses v1 API"]
+    assert assessment.prerequisites == ["SQL basics"]
+    assert assessment.web_search_used is False
+
+
+def test_assess_report_web_search_needs_flag_and_tool_support(monkeypatch) -> None:
+    report = make_report()
+    settings = get_settings()
+    monkeypatch.setattr(settings, "assessment_web_search", True)
+
+    plain = StubJsonLlm([ASSESSMENT_PAYLOAD])
+    assessment = plain.assess_report(report=report, metadata=make_source().metadata, output_language="ru")
+    assert plain.calls[0].get("tools") is None  # transport without tools support
+    assert assessment is not None and assessment.web_search_used is False
+
+    class ToolStub(StubJsonLlm):
+        def _supports_tools(self) -> bool:
+            return True
+
+    tooled = ToolStub([ASSESSMENT_PAYLOAD])
+    assessment = tooled.assess_report(report=report, metadata=make_source().metadata, output_language="ru")
+    assert tooled.calls[0]["tools"] == [{"type": "web_search"}]
+    assert assessment is not None and assessment.web_search_used is True
+
+
 def test_frame_selections_from_payload_filters_low_scores(tmp_path: Path) -> None:
     frames = make_frames(tmp_path, count=2)
     payload = {

@@ -85,6 +85,49 @@ REPORT_SCHEMA: dict[str, Any] = {
 }
 
 
+ASSESSMENT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "originality_score": {"type": "number"},
+        "originality": {"type": "string"},
+        "freshness_score": {"type": "number"},
+        "freshness": {"type": "string"},
+        "stale_claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "claim": {"type": "string"},
+                    "timestamp_s": {"type": ["number", "null"]},
+                    "risk": {"type": "string"},
+                    "confidence": {"type": "number"},
+                },
+                "required": ["claim", "timestamp_s", "risk", "confidence"],
+            },
+        },
+        "audience": {"type": "string"},
+        "prerequisites": {"type": "array", "items": {"type": "string"}},
+        "actionability": {"type": "string"},
+        "insight_density": {"type": "string"},
+        "verdict": {"type": "string"},
+    },
+    "required": [
+        "originality_score",
+        "originality",
+        "freshness_score",
+        "freshness",
+        "stale_claims",
+        "audience",
+        "prerequisites",
+        "actionability",
+        "insight_density",
+        "verdict",
+    ],
+}
+
+
 NOTES_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,

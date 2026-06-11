@@ -2,7 +2,16 @@ from pathlib import Path
 
 from PIL import Image
 
-from kotomka.models import FrameSelection, Report, ReportSection, Transcript, TranscriptSegment, VideoMetadata
+from kotomka.models import (
+    AssessmentFlag,
+    FrameSelection,
+    Report,
+    ReportAssessment,
+    ReportSection,
+    Transcript,
+    TranscriptSegment,
+    VideoMetadata,
+)
 from kotomka.pdf import _write_reportlab_pdf
 
 
@@ -43,6 +52,16 @@ def test_reportlab_pdf_contains_full_report_shape(tmp_path: Path) -> None:
                     text="Transcript text " * 80,
                 )
             ],
+        ),
+        assessment=ReportAssessment(
+            verdict="The report replaces watching.",
+            originality="Mostly original material.",
+            freshness="Current as of the upload date.",
+            audience="Engineers.",
+            prerequisites=["Basics"],
+            actionability="Apply directly.",
+            insight_density="High.",
+            stale_claims=[AssessmentFlag(claim="Version-specific advice", timestamp_s=30.0, risk="May be outdated")],
         ),
     )
     output = tmp_path / "report.pdf"

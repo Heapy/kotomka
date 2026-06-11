@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 
 import kotomka.app as app_module
-from kotomka.models import JobCreate
+from kotomka.models import JobCreate, Report, ReportAssessment, Transcript, VideoMetadata
+from kotomka.reporting import save_report
 from kotomka.storage import JobStore
 
 
@@ -36,6 +37,34 @@ def test_jobs_index_hides_read_jobs_until_requested(tmp_path, monkeypatch) -> No
     assert response_with_read.status_code == 200
     assert unread.id in response_with_read.text
     assert read.id in response_with_read.text
+
+
+def test_report_page_renders_assessment(tmp_path, monkeypatch) -> None:
+    test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = test_store.create_job(JobCreate(source_url="https://example.com/v"))
+    test_store.update_job(job.id, status="completed", progress=100, message="Completed")
+    report = Report(
+        video=VideoMetadata(source_url="https://example.com/v", title="Assessed video"),
+        summary="Summary text",
+        sections=[],
+        frames=[],
+        transcript=Transcript(language="en", duration_s=10, segments=[]),
+        assessment=ReportAssessment(
+            verdict="Report replaces watching.",
+            originality_score=0.7,
+            freshness_score=0.4,
+        ),
+    )
+    save_report(report, job.artifact_dir / "report.json")
+    monkeypatch.setattr(app_module, "store", test_store)
+
+    with TestClient(app_module.app) as client:
+        response = client.get(f"/jobs/{job.id}")
+
+    assert response.status_code == 200
+    assert "Assessment" in response.text
+    assert "Report replaces watching." in response.text
+    assert "Originality 70%" in response.text
 
 
 class StubWorker:

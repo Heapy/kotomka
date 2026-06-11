@@ -152,11 +152,34 @@ class ReportSection(BaseModel):
     citations: list[float] = Field(default_factory=list)
 
 
+class AssessmentFlag(BaseModel):
+    claim: str
+    timestamp_s: float | None = None
+    risk: str = ""
+    confidence: float = 0.5
+
+
+class ReportAssessment(BaseModel):
+    originality_score: float = 0.5
+    originality: str = ""
+    freshness_score: float = 0.5
+    freshness: str = ""
+    stale_claims: list[AssessmentFlag] = Field(default_factory=list)
+    audience: str = ""
+    prerequisites: list[str] = Field(default_factory=list)
+    actionability: str = ""
+    insight_density: str = ""
+    verdict: str = ""
+    web_search_used: bool = False
+    assessed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Report(BaseModel):
     video: VideoMetadata
     summary: str
     sections: list[ReportSection]
     frames: list[FrameSelection]
     transcript: Transcript
+    assessment: ReportAssessment | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     output_language: str = "ru"

@@ -8,13 +8,30 @@ from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
+from datetime import date
+
 from ...config import Settings, get_settings
-from ...models import CandidateFrame, FrameSelection, Report, ReportSection, SourceArtifact, Transcript, VideoMetadata
+from ...models import (
+    AssessmentFlag,
+    CandidateFrame,
+    FrameSelection,
+    Report,
+    ReportAssessment,
+    ReportSection,
+    SourceArtifact,
+    Transcript,
+    VideoMetadata,
+)
 from ...transcripts import chunk_transcript, format_segment_line, format_transcript, window_excerpt
 from ...utils import write_json
 from .base import LlmProvider
-from .json_helpers import FRAME_SCORE_SCHEMA, NOTES_SCHEMA, REPORT_SCHEMA
-from .prompts import FRAME_SCORE_INSTRUCTIONS, NOTES_INSTRUCTIONS, REPORT_INSTRUCTIONS
+from .json_helpers import ASSESSMENT_SCHEMA, FRAME_SCORE_SCHEMA, NOTES_SCHEMA, REPORT_SCHEMA
+from .prompts import (
+    ASSESSMENT_INSTRUCTIONS,
+    FRAME_SCORE_INSTRUCTIONS,
+    NOTES_INSTRUCTIONS,
+    REPORT_INSTRUCTIONS,
+)
 
 MIN_FRAME_SCORE = 0.45
 
@@ -48,6 +65,9 @@ class JsonLlmProviderBase(LlmProvider):
 
     def _scoring_model(self) -> str | None:
         return None
+
+    def _supports_tools(self) -> bool:
+        return False
 
     def score_frames(self, frames: list[CandidateFrame], transcript: Transcript) -> list[FrameSelection]:
         if not frames:
@@ -123,6 +143,39 @@ class JsonLlmProviderBase(LlmProvider):
             transcript=display_transcript(transcript, speaker_names),
             output_language=output_language,
         )
+
+    def assess_report(
+        self,
+        *,
+        report: Report,
+        metadata: VideoMetadata,
+        output_language: str,
+    ) -> ReportAssessment | None:
+        settings = get_settings()
+        web_search = bool(settings.assessment_web_search) and self._supports_tools()
+        context = {
+            "output_language": output_language,
+            "today": date.today().isoformat(),
+            "video": metadata_summary(metadata),
+            "report_summary": report.summary,
+            "report_sections": [
+                {"title": section.title, "start_s": section.start_s, "end_s": section.end_s, "body": section.body}
+                for section in report.sections
+            ],
+        }
+        payload = self._request_json(
+            instructions=ASSESSMENT_INSTRUCTIONS,
+            text=json.dumps(context, ensure_ascii=False, default=str),
+            images=[],
+            image_detail=settings.scoring_image_detail,
+            schema_name="report_assessment",
+            schema=ASSESSMENT_SCHEMA,
+            tools=[{"type": "web_search"}] if web_search else None,
+        )
+        assessment = coerce_assessment(payload)
+        if assessment is not None:
+            assessment.web_search_used = web_search
+        return assessment
 
     def _chunk_notes_text(
         self,
@@ -280,6 +333,51 @@ def display_transcript(transcript: Transcript, speaker_names: dict[str, str]) ->
     ]
     speakers = list(dict.fromkeys(speaker_names.get(speaker, speaker) for speaker in transcript.speakers))
     return transcript.model_copy(update={"segments": segments, "speakers": speakers, "words": None})
+
+
+def coerce_assessment(payload: Any) -> ReportAssessment | None:
+    if not isinstance(payload, dict):
+        return None
+    flags: list[AssessmentFlag] = []
+    for item in payload.get("stale_claims") or []:
+        if not isinstance(item, dict):
+            continue
+        claim = str(item.get("claim") or "").strip()
+        if not claim:
+            continue
+        flags.append(
+            AssessmentFlag(
+                claim=claim,
+                timestamp_s=_float_or_none(item.get("timestamp_s")),
+                risk=str(item.get("risk") or ""),
+                confidence=_clamp01(item.get("confidence"), default=0.5),
+            )
+        )
+    return ReportAssessment(
+        originality_score=_clamp01(payload.get("originality_score"), default=0.5),
+        originality=str(payload.get("originality") or ""),
+        freshness_score=_clamp01(payload.get("freshness_score"), default=0.5),
+        freshness=str(payload.get("freshness") or ""),
+        stale_claims=flags,
+        audience=str(payload.get("audience") or ""),
+        prerequisites=[str(item).strip() for item in payload.get("prerequisites") or [] if str(item).strip()],
+        actionability=str(payload.get("actionability") or ""),
+        insight_density=str(payload.get("insight_density") or ""),
+        verdict=str(payload.get("verdict") or ""),
+    )
+
+
+def _float_or_none(value: Any) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _clamp01(value: Any, *, default: float) -> float:
+    number = _float_or_none(value)
+    if number is None:
+        return default
+    return min(1.0, max(0.0, number))
 
 
 def coerce_sections(items: Any) -> list[ReportSection]:

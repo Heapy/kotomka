@@ -25,6 +25,9 @@ class OpenAiResponsesProvider(JsonLlmProviderBase):
     def _scoring_model(self) -> str | None:
         return self.scoring_model
 
+    def _supports_tools(self) -> bool:
+        return True
+
     def _request_json(
         self,
         *,

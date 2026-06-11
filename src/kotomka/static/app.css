@@ -496,3 +496,40 @@ summary {
     border: 0;
   }
 }
+
+.assessment-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.score-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-dark);
+}
+
+.score-chip-muted {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stale-claims-title {
+  margin: 16px 0 8px;
+}
+
+.stale-claims {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.stale-claims li {
+  margin-bottom: 6px;
+  line-height: 1.5;
+}

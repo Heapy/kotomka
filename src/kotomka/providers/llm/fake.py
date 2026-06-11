@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...models import CandidateFrame, FrameSelection, Report, ReportSection, SourceArtifact, Transcript
+from ...models import (
+    AssessmentFlag,
+    CandidateFrame,
+    FrameSelection,
+    Report,
+    ReportAssessment,
+    ReportSection,
+    SourceArtifact,
+    Transcript,
+    VideoMetadata,
+)
 from .base import LlmProvider
 
 
@@ -72,4 +82,32 @@ class FakeLlmProvider(LlmProvider):
             frames=frames,
             transcript=transcript,
             output_language=output_language,
+        )
+
+    def assess_report(
+        self,
+        *,
+        report: Report,
+        metadata: VideoMetadata,
+        output_language: str,
+    ) -> ReportAssessment | None:
+        del output_language
+        return ReportAssessment(
+            originality_score=0.5,
+            originality="Offline fake assessment: originality is not evaluated.",
+            freshness_score=0.5,
+            freshness=f"Anchored to upload date {metadata.upload_date or 'unknown'}; offline assessment.",
+            stale_claims=[
+                AssessmentFlag(
+                    claim="Fake claim that may age",
+                    timestamp_s=report.sections[0].start_s if report.sections else 0.0,
+                    risk="None - produced by the offline fake provider.",
+                    confidence=1.0,
+                )
+            ],
+            audience="Developers testing Kotomka offline.",
+            prerequisites=["None"],
+            actionability="Replace fake providers with live ones for a real assessment.",
+            insight_density="Matches the fake transcript exactly.",
+            verdict="The fake report fully replaces watching the fake video.",
         )

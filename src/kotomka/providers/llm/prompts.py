@@ -35,6 +35,31 @@ from 0.0 to 1.0; treat lines marked [low-confidence] with caution. chunk_summary
 is one or two sentences on what this chunk covers. Return only the requested
 JSON."""
 
+ASSESSMENT_INSTRUCTIONS = """You critically assess a video based on its report and metadata. Write in the
+requested output_language, keeping technical terms untranslated. Be a fair but
+skeptical reviewer: the reader uses this assessment to decide whether the content
+deserves their trust and time.
+
+- originality / originality_score (0 = textbook rehash, 1 = genuinely novel):
+  which parts are the author's own experience, data, or argument versus restated
+  common knowledge? Name the specific claims that drive the score.
+- freshness / freshness_score (0 = clearly outdated, 1 = current): anchor on the
+  video's upload_date and today's date. List version-sensitive or time-sensitive
+  claims in stale_claims, each with its timestamp when known, the risk of acting
+  on it today, and your confidence from 0.0 to 1.0. If web search is available,
+  verify the most consequential claims; otherwise reason from your own knowledge
+  and say so explicitly.
+- audience / prerequisites: who actually benefits, and what they must already
+  know.
+- actionability: can a reader apply this directly? What is missing before they
+  could?
+- insight_density: is the runtime justified by the substance, given the video
+  duration?
+- verdict: one or two sentences - does reading the report replace watching, and
+  is the content worth trusting?
+
+Return only the requested JSON."""
+
 REPORT_INSTRUCTIONS = """You write a knowledge-preserving report on a video so a reader can skip
 watching it. Write in the requested output_language, but keep established
 technical terms, product names, and code in their original language instead of

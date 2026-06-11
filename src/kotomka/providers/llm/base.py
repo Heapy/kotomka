@@ -3,7 +3,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from ...models import CandidateFrame, FrameSelection, Report, SourceArtifact, Transcript
+from ...models import (
+    CandidateFrame,
+    FrameSelection,
+    Report,
+    ReportAssessment,
+    SourceArtifact,
+    Transcript,
+    VideoMetadata,
+)
 
 
 class LlmProvider(ABC):
@@ -26,4 +34,17 @@ class LlmProvider(ABC):
         """Build the report. `work_dir` is the job artifact dir, used to resolve
         selected frame images so vision-capable providers can ground the report."""
         raise NotImplementedError
+
+    def assess_report(
+        self,
+        *,
+        report: Report,
+        metadata: VideoMetadata,
+        output_language: str,
+    ) -> ReportAssessment | None:
+        """Critically assess originality, freshness, and usefulness of a finished
+        report. Defaults to no assessment so simple providers and test doubles
+        keep working."""
+        del report, metadata, output_language
+        return None
 
