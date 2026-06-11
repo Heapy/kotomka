@@ -129,7 +129,8 @@ class CandidateFrame(BaseModel):
     frame_id: str
     timestamp_s: float
     path: Path
-    source: Literal["scene", "periodic"] = "periodic"
+    source: Literal["scene", "periodic", "plateau"] = "periodic"
+    dwell_s: float | None = None
 
 
 class FrameSelection(BaseModel):

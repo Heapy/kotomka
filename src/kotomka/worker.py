@@ -77,6 +77,10 @@ class JobWorker:
                 job.artifact_dir / "frames",
                 duration_s=source.metadata.duration_s,
                 interval_seconds=self.settings.frame_interval_seconds,
+                max_gap_seconds=self.settings.frame_max_gap_seconds,
+                plateau_min_dwell_s=self.settings.frame_plateau_min_dwell_seconds,
+                plateau_hash_distance=self.settings.frame_plateau_hash_distance,
+                blur_threshold=self.settings.frame_blur_threshold,
             )
             write_json(job.artifact_dir / "frames.json", [frame.model_dump() for frame in frames])
 

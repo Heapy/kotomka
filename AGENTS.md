@@ -85,14 +85,22 @@ Do not print secret values in logs, tests, or terminal output.
 
 ## Frame Selection
 
-Frame extraction first uses ffmpeg scene detection:
+Candidate frames come from three sources, merged and deduplicated:
 
-```text
-select=gt(scene\,0.35),showinfo
-```
+1. Plateau detection (slide-aware): grayscale thumbnails are sampled at 1 fps and
+   hashed; stable runs of at least `KOTOMKA_FRAME_PLATEAU_MIN_DWELL_SECONDS` (hash
+   distance ≤ `KOTOMKA_FRAME_PLATEAU_HASH_DISTANCE`) yield one full-resolution frame
+   near the run's end, after slide builds/animations have finished. Dwell time is
+   recorded on the candidate (`dwell_s`).
+2. ffmpeg scene detection (`select=gt(scene\,0.35),showinfo`) for camera cuts.
+3. Gap filling: any stretch longer than `KOTOMKA_FRAME_MAX_GAP_SECONDS` without a
+   candidate is filled at `KOTOMKA_FRAME_INTERVAL_SECONDS` strides, so the whole
+   timeline always has coverage (this replaces the old "<3 scene frames" fallback).
 
-If too few scene frames are found, periodic extraction is used as a fallback.
-Frames are deduplicated with perceptual hash.
+An optional blur gate (`KOTOMKA_FRAME_BLUR_THRESHOLD`, 0 = disabled) drops
+transition-blurred plateau/scene candidates before LLM scoring. Perceptual-hash
+dedupe runs in source-priority order (plateau, then scene, then periodic), so the
+post-animation plateau frame wins over a mid-transition scene duplicate.
 
 LLM frame scoring is batched across the full timeline:
 
