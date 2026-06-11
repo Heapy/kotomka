@@ -12,16 +12,8 @@ import httpx
 from openai import OpenAI
 
 from ...config import get_settings
-from ...models import CandidateFrame, FrameSelection, Report, ReportSection, SourceArtifact, Transcript
-from .base import LlmProvider
-from .json_helpers import FRAME_SCORE_SCHEMA, REPORT_SCHEMA, parse_json_object
-from .openai_responses import (
-    FRAME_SCORE_INSTRUCTIONS,
-    REPORT_INSTRUCTIONS,
-    _frame_selections_from_payload,
-    _image_data_url,
-    _transcript_excerpt,
-)
+from .json_base import ImageInput, JsonLlmProviderBase, image_data_url
+from .json_helpers import parse_json_object
 
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -42,12 +34,13 @@ class CodexAuthError(RuntimeError):
     pass
 
 
-class CodexSubscriptionProvider(LlmProvider):
+class CodexSubscriptionProvider(JsonLlmProviderBase):
     name = "codex_subscription"
 
     def __init__(self, *, model: str | None = None) -> None:
         self.settings = get_settings()
         self.model = model or self.settings.codex_model
+        self.scoring_model = self.settings.codex_scoring_model or self.model
         self.creds = resolve_codex_credentials()
         self.client = OpenAI(
             api_key=self.creds.access_token,
@@ -55,58 +48,24 @@ class CodexSubscriptionProvider(LlmProvider):
             default_headers=codex_default_headers(self.creds.access_token),
         )
 
-    def score_frames(self, frames: list[CandidateFrame], transcript: Transcript) -> list[FrameSelection]:
-        if not frames:
-            return []
-        payload = self._request_json(
-            instructions=FRAME_SCORE_INSTRUCTIONS,
-            text=f"Transcript excerpt:\n{_transcript_excerpt(transcript)}\n\nScore these frame IDs: {[frame.frame_id for frame in frames]}",
-            images=frames,
-            schema=FRAME_SCORE_SCHEMA,
-        )
-        return _frame_selections_from_payload(payload, frames)
-
-    def build_report(
-        self,
-        *,
-        source: SourceArtifact,
-        transcript: Transcript,
-        frames: list[FrameSelection],
-        output_language: str,
-    ) -> Report:
-        payload = self._request_json(
-            instructions=REPORT_INSTRUCTIONS,
-            text=json.dumps(
-                {
-                    "output_language": output_language,
-                    "video": source.metadata.model_dump(),
-                    "transcript": transcript.model_dump(),
-                    "selected_frames": [frame.model_dump() for frame in frames],
-                },
-                ensure_ascii=False,
-                default=str,
-            ),
-            images=[],
-            schema=REPORT_SCHEMA,
-        )
-        sections = [ReportSection.model_validate(item) for item in payload.get("sections", [])]
-        return Report(
-            video=source.metadata,
-            summary=str(payload.get("summary") or ""),
-            sections=sections,
-            frames=frames,
-            transcript=transcript,
-            output_language=output_language,
-        )
+    def _scoring_model(self) -> str | None:
+        return self.scoring_model
 
     def _request_json(
         self,
         *,
         instructions: str,
         text: str,
-        images: list[CandidateFrame],
+        images: list[ImageInput],
+        image_detail: str,
+        schema_name: str,
         schema: dict[str, Any],
+        tools: list[dict[str, Any]] | None = None,
+        model: str | None = None,
     ) -> dict[str, Any]:
+        # The Codex backend supports neither strict json_schema nor tools; the
+        # schema is embedded as a prompt hint and tool requests are dropped.
+        del schema_name, tools
         schema_hint = json.dumps(schema, ensure_ascii=False)
         content: list[dict[str, Any]] = [
             {
@@ -114,11 +73,11 @@ class CodexSubscriptionProvider(LlmProvider):
                 "text": f"{text}\n\nReturn a JSON object matching this schema exactly:\n{schema_hint}",
             }
         ]
-        for frame in images:
-            content.append({"type": "input_text", "text": f"frame_id={frame.frame_id} timestamp_s={frame.timestamp_s}"})
-            content.append({"type": "input_image", "image_url": _image_data_url(frame.path), "detail": "low"})
+        for image in images:
+            content.append({"type": "input_text", "text": image.label})
+            content.append({"type": "input_image", "image_url": image_data_url(image.path), "detail": image_detail})
         events = self.client.responses.create(
-            model=self.model,
+            model=model or self.model,
             instructions=instructions,
             input=[{"role": "user", "content": content}],
             store=False,

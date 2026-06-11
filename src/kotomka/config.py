@@ -22,7 +22,14 @@ class Settings(BaseSettings):
     max_selected_frames: int = 24
     selected_frame_min_gap_seconds: int = 20
     openai_model: str = "gpt-4.1"
+    openai_scoring_model: str | None = None
     codex_model: str = "gpt-5.4"
+    codex_scoring_model: str | None = None
+    scoring_image_detail: str = "low"
+    report_image_detail: str = "high"
+    report_max_images: int = 16
+    transcript_excerpt_margin_seconds: int = 30
+    transcript_low_confidence_threshold: float = 0.5
     codex_auth_file: Path = Field(
         default=Path("data/codex_subscription_auth.json"),
         validation_alias=AliasChoices("KOTOMKA_CODEX_AUTH_FILE", "CODEX_SUBSCRIPTION_AUTH_FILE"),

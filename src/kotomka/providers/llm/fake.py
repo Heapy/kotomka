@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from ...models import CandidateFrame, FrameSelection, Report, ReportSection, SourceArtifact, Transcript
 from .base import LlmProvider
 
@@ -31,7 +33,9 @@ class FakeLlmProvider(LlmProvider):
         transcript: Transcript,
         frames: list[FrameSelection],
         output_language: str,
+        work_dir: Path | None = None,
     ) -> Report:
+        del work_dir
         sections: list[ReportSection] = []
         if transcript.segments:
             for index, segment in enumerate(transcript.segments):

@@ -26,6 +26,10 @@ Important modules:
   `VideoMetadata` carries yt-dlp metadata (description, tags, upload date, language, channel, chapters) used by STT keyterms, report grounding, and frame selection.
 - `src/kotomka/providers/stt/`: `fake` and `assemblyai` STT providers.
 - `src/kotomka/providers/llm/`: `fake`, OpenAI Platform, and Codex subscription providers.
+  Shared prompt/schema orchestration lives in `json_base.py` (`JsonLlmProviderBase`);
+  OpenAI and Codex implement only the `_request_json` transport (OpenAI: strict
+  json_schema + tools; Codex: schema-as-prompt-hint, streaming, no tools).
+- `src/kotomka/transcripts.py`: compact transcript formatting and time-windowed excerpts for LLM input.
 - `src/kotomka/pdf.py`: PDF export; ReportLab is the default renderer.
 
 ## Data And Artifacts

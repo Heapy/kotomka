@@ -100,6 +100,7 @@ class JobWorker:
                 transcript=transcript,
                 frames=selected_frames,
                 output_language=job.input.output_language,
+                work_dir=job.artifact_dir,
             )
             report = normalize_report(report, tolerance_s=self.settings.citation_snap_tolerance_seconds)
             report_path = job.artifact_dir / "report.json"
