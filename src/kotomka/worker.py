@@ -6,7 +6,7 @@ from threading import Event, Thread
 
 from .config import Settings
 from .media import extract_candidate_frames
-from .models import CandidateFrame, FrameSelection, Transcript
+from .models import CandidateFrame, Chapter, FrameSelection, Transcript
 from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
 from .providers.llm.base import LlmProvider
 from .providers.llm import get_llm_provider
@@ -97,9 +97,20 @@ class JobWorker:
                 batch_size=self.settings.max_frames_for_llm,
                 max_selected=self.settings.max_selected_frames,
                 min_gap_seconds=self.settings.selected_frame_min_gap_seconds,
+                chapters=source.metadata.chapters,
             )
             if not selected_frames and frames:
                 selected_frames = _fallback_frame_selection(frames, max_selected=min(6, self.settings.max_selected_frames))
+            if selected_frames and self.settings.recaption_selected_frames:
+                self.store.update_job(job_id, progress=75, message="Refining frame captions")
+                try:
+                    selected_frames = llm.recaption_frames(
+                        selected_frames,
+                        work_dir=job.artifact_dir,
+                        transcript=transcript,
+                    )
+                except Exception:
+                    traceback.print_exc()
             write_json(job.artifact_dir / "selected_frames.json", [frame.model_dump() for frame in selected_frames])
 
             self.store.update_job(job_id, progress=80, message="Building report")
@@ -148,6 +159,7 @@ def _score_frames_across_timeline(
     batch_size: int,
     max_selected: int,
     min_gap_seconds: int,
+    chapters: list[Chapter] | None = None,
 ) -> list[FrameSelection]:
     if not frames or max_selected <= 0:
         return []
@@ -173,6 +185,7 @@ def _score_frames_across_timeline(
         list(scored.values()),
         max_selected=max_selected,
         min_gap_seconds=max(0, int(min_gap_seconds)),
+        chapters=chapters,
     )
 
 
@@ -181,24 +194,41 @@ def _select_diverse_frames(
     *,
     max_selected: int,
     min_gap_seconds: int,
+    chapters: list[Chapter] | None = None,
 ) -> list[FrameSelection]:
     if max_selected <= 0:
         return []
     selected: list[FrameSelection] = []
+    selected_ids: set[str] = set()
+
+    def take(candidate: FrameSelection) -> None:
+        selected.append(candidate)
+        selected_ids.add(candidate.frame_id)
+
+    if chapters:
+        chapter_picks: list[FrameSelection] = []
+        for chapter in chapters:
+            in_chapter = [item for item in selections if chapter.start_s <= item.timestamp_s < chapter.end_s]
+            if in_chapter:
+                chapter_picks.append(max(in_chapter, key=lambda item: item.score))
+        chapter_picks.sort(key=lambda item: -item.score)
+        for pick in chapter_picks[:max_selected]:
+            if pick.frame_id not in selected_ids:
+                take(pick)
     for candidate in sorted(selections, key=lambda item: (-item.score, item.timestamp_s)):
         if len(selected) >= max_selected:
             break
+        if candidate.frame_id in selected_ids:
+            continue
         if min_gap_seconds and any(abs(candidate.timestamp_s - item.timestamp_s) < min_gap_seconds for item in selected):
             continue
-        selected.append(candidate)
+        take(candidate)
     if len(selected) < max_selected:
-        selected_ids = {item.frame_id for item in selected}
         for candidate in sorted(selections, key=lambda item: (-item.score, item.timestamp_s)):
             if len(selected) >= max_selected:
                 break
             if candidate.frame_id not in selected_ids:
-                selected.append(candidate)
-                selected_ids.add(candidate.frame_id)
+                take(candidate)
     return sorted(selected, key=lambda item: item.timestamp_s)
 
 

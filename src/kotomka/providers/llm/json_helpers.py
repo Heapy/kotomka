@@ -85,6 +85,28 @@ REPORT_SCHEMA: dict[str, Any] = {
 }
 
 
+RECAPTION_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "frames": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "frame_id": {"type": "string"},
+                    "caption": {"type": "string"},
+                    "ocr_text": {"type": ["string", "null"]},
+                },
+                "required": ["frame_id", "caption", "ocr_text"],
+            },
+        }
+    },
+    "required": ["frames"],
+}
+
+
 ASSESSMENT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,

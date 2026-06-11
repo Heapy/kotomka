@@ -25,11 +25,12 @@ from ...models import (
 from ...transcripts import chunk_transcript, format_segment_line, format_transcript, window_excerpt
 from ...utils import write_json
 from .base import LlmProvider
-from .json_helpers import ASSESSMENT_SCHEMA, FRAME_SCORE_SCHEMA, NOTES_SCHEMA, REPORT_SCHEMA
+from .json_helpers import ASSESSMENT_SCHEMA, FRAME_SCORE_SCHEMA, NOTES_SCHEMA, RECAPTION_SCHEMA, REPORT_SCHEMA
 from .prompts import (
     ASSESSMENT_INSTRUCTIONS,
     FRAME_SCORE_INSTRUCTIONS,
     NOTES_INSTRUCTIONS,
+    RECAPTION_INSTRUCTIONS,
     REPORT_INSTRUCTIONS,
 )
 
@@ -144,6 +145,44 @@ class JsonLlmProviderBase(LlmProvider):
             output_language=output_language,
         )
 
+    def recaption_frames(
+        self,
+        selections: list[FrameSelection],
+        *,
+        work_dir: Path,
+        transcript: Transcript | None = None,
+    ) -> list[FrameSelection]:
+        if not selections:
+            return selections
+        settings = get_settings()
+        images = report_images(selections, work_dir, max_images=len(selections))
+        if not images:
+            return selections
+        text = "Re-caption these frames."
+        if transcript is not None and transcript.segments:
+            excerpt = window_excerpt(
+                transcript,
+                start_s=min(item.timestamp_s for item in selections),
+                end_s=max(item.timestamp_s for item in selections),
+                margin_s=float(settings.transcript_excerpt_margin_seconds),
+                max_chars=4000,
+            )
+            text = f"Transcript context:\n{excerpt}\n\n{text}"
+        try:
+            payload = self._request_json(
+                instructions=RECAPTION_INSTRUCTIONS,
+                text=text,
+                images=images,
+                image_detail=settings.report_image_detail,
+                schema_name="frame_recaption",
+                schema=RECAPTION_SCHEMA,
+            )
+        except Exception:
+            # Captions from the scoring pass are still usable.
+            traceback.print_exc()
+            return selections
+        return merge_recaptions(selections, payload)
+
     def assess_report(
         self,
         *,
@@ -232,10 +271,37 @@ class JsonLlmProviderBase(LlmProvider):
 
 def candidate_frame_label(frame: CandidateFrame) -> str:
     label = f"frame_id={frame.frame_id} timestamp_s={frame.timestamp_s}"
+    if frame.dwell_s is not None:
+        label += f" shown_for_s={frame.dwell_s:.0f}"
     if frame.ocr_text:
         snippet = " ".join(frame.ocr_text.split())[:200]
         label += f' ocr="{snippet}"'
     return label
+
+
+def merge_recaptions(selections: list[FrameSelection], payload: Any) -> list[FrameSelection]:
+    by_id: dict[str, dict[str, Any]] = {}
+    if isinstance(payload, dict):
+        for item in payload.get("frames") or []:
+            if isinstance(item, dict) and item.get("frame_id"):
+                by_id[str(item["frame_id"])] = item
+    merged: list[FrameSelection] = []
+    for selection in selections:
+        item = by_id.get(selection.frame_id)
+        if not item:
+            merged.append(selection)
+            continue
+        caption = str(item.get("caption") or "").strip()
+        ocr_text = item.get("ocr_text") if isinstance(item.get("ocr_text"), str) else None
+        merged.append(
+            selection.model_copy(
+                update={
+                    "caption": caption or selection.caption,
+                    "ocr_text": ocr_text or selection.ocr_text,
+                }
+            )
+        )
+    return merged
 
 
 def selection_label(selection: FrameSelection) -> str:

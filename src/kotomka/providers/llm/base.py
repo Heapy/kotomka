@@ -35,6 +35,18 @@ class LlmProvider(ABC):
         selected frame images so vision-capable providers can ground the report."""
         raise NotImplementedError
 
+    def recaption_frames(
+        self,
+        selections: list[FrameSelection],
+        *,
+        work_dir: Path,
+        transcript: Transcript | None = None,
+    ) -> list[FrameSelection]:
+        """Optionally re-caption the selected frames with a higher-fidelity pass.
+        Defaults to a passthrough so simple providers and test doubles keep working."""
+        del work_dir, transcript
+        return selections
+
     def assess_report(
         self,
         *,

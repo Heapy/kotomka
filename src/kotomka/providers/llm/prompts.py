@@ -18,7 +18,20 @@ For each frame return:
   text you cannot actually read.
 
 Use the transcript excerpt to judge how strongly each frame supports what is being
-said around its timestamp. Return only the requested JSON."""
+said around its timestamp. Frame labels may carry extra evidence: shown_for_s is
+how long the content stayed on screen (longer usually means the speaker considered
+it important), and ocr="..." is text already recognized from the frame - trust it
+over what you can read in a downscaled image. Return only the requested JSON."""
+
+RECAPTION_INSTRUCTIONS = """You write final captions for frames already selected into a video report.
+You see each frame at high detail - correct any earlier misreadings.
+
+For each frame return:
+- caption: one factual sentence naming exactly what the frame shows, including
+  visible titles, numbers, and labels.
+- ocr_text: the exact readable text when legible, else null. Never invent text.
+
+Return only the requested JSON."""
 
 NOTES_INSTRUCTIONS = """You extract structured notes from one chunk of a video transcript.
 

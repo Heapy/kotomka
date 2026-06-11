@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     transcript_low_confidence_threshold: float = 0.5
     assessment_enabled: bool = True
     assessment_web_search: bool = False
+    recaption_selected_frames: bool = True
     codex_auth_file: Path = Field(
         default=Path("data/codex_subscription_auth.json"),
         validation_alias=AliasChoices("KOTOMKA_CODEX_AUTH_FILE", "CODEX_SUBSCRIPTION_AUTH_FILE"),

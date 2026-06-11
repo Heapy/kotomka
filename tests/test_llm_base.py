@@ -319,6 +319,66 @@ def test_assess_report_web_search_needs_flag_and_tool_support(monkeypatch) -> No
     assert assessment is not None and assessment.web_search_used is True
 
 
+def make_selection_files(tmp_path: Path, count: int) -> list[FrameSelection]:
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir(exist_ok=True)
+    selections = []
+    for index in range(count):
+        name = f"sel-{index:02d}.png"
+        (frames_dir / name).write_bytes(b"\x89PNG fake")
+        selections.append(
+            FrameSelection(
+                frame_id=f"sel-{index:02d}",
+                timestamp_s=float(index * 30),
+                image_path=name,
+                score=0.9,
+                caption=f"old caption {index}",
+                ocr_text=None,
+            )
+        )
+    return selections
+
+
+def test_recaption_frames_merges_and_keeps_missing(tmp_path: Path) -> None:
+    selections = make_selection_files(tmp_path, 2)
+    stub = StubJsonLlm(
+        [
+            {
+                "frames": [
+                    {"frame_id": "sel-00", "caption": "new caption", "ocr_text": "SELECT 1"},
+                    {"frame_id": "ghost", "caption": "ignored", "ocr_text": None},
+                ]
+            }
+        ]
+    )
+
+    updated = stub.recaption_frames(selections, work_dir=tmp_path, transcript=make_transcript())
+
+    assert stub.calls[0]["schema_name"] == "frame_recaption"
+    assert stub.calls[0]["image_detail"] == "high"
+    assert updated[0].caption == "new caption"
+    assert updated[0].ocr_text == "SELECT 1"
+    assert updated[1].caption == "old caption 1"
+
+
+def test_recaption_frames_passes_through_on_failure(tmp_path: Path) -> None:
+    selections = make_selection_files(tmp_path, 1)
+
+    class ExplodingStub(StubJsonLlm):
+        def _request_json(self, **kwargs: Any) -> dict[str, Any]:
+            raise RuntimeError("boom")
+
+    updated = ExplodingStub([]).recaption_frames(selections, work_dir=tmp_path)
+    assert updated == selections
+
+
+def test_recaption_frames_passes_through_without_images(tmp_path: Path) -> None:
+    selection = FrameSelection(frame_id="x", timestamp_s=0, image_path="missing.png", score=0.9, caption="keep")
+    stub = StubJsonLlm([])
+    assert stub.recaption_frames([selection], work_dir=tmp_path) == [selection]
+    assert stub.calls == []
+
+
 def test_frame_selections_from_payload_filters_low_scores(tmp_path: Path) -> None:
     frames = make_frames(tmp_path, count=2)
     payload = {
