@@ -162,6 +162,21 @@ make test    # uv run pytest
 
 Override the port with `make serve PORT=8001`.
 
+The launchd user agent (`launchd/dev.kotomka.plist`, label `dev.kotomka`) keeps
+the server running in the background; its logs go to `data/launchd.out.log` and
+`data/launchd.err.log`. Manage it with:
+
+```bash
+make launchd-install    # copy the plist to ~/Library/LaunchAgents and (re)load it
+make launchd-restart    # restart the running service (launchctl kickstart -k)
+make launchd-status     # launchctl print for the service
+make launchd-uninstall  # unload the service and remove the installed plist
+```
+
+`launchd-install` is also the update path: after editing the repo plist, run it
+to reinstall and restart the service. Note it restarts the server, which kills
+any in-flight job.
+
 Or run the underlying commands directly:
 
 ```bash
