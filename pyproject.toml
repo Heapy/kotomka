@@ -26,6 +26,9 @@ dev = [
   "pytest-asyncio>=0.23.0",
   "respx>=0.21.0",
 ]
+ocr = [
+  "ocrmac>=1.0 ; platform_system == 'Darwin'",
+]
 
 [project.scripts]
 kotomka = "kotomka.cli:main"

@@ -131,6 +131,7 @@ class CandidateFrame(BaseModel):
     path: Path
     source: Literal["scene", "periodic", "plateau"] = "periodic"
     dwell_s: float | None = None
+    ocr_text: str | None = None
 
 
 class FrameSelection(BaseModel):

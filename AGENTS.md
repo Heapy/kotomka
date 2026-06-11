@@ -102,6 +102,13 @@ transition-blurred plateau/scene candidates before LLM scoring. Perceptual-hash
 dedupe runs in source-priority order (plateau, then scene, then periodic), so the
 post-animation plateau frame wins over a mid-transition scene duplicate.
 
+When the `ocr` extra is installed (ocrmac, macOS Apple Vision) and
+`KOTOMKA_FRAME_OCR_ENABLED` is on (default), candidates are OCR-annotated after
+extraction: bullet-build predecessors whose text is contained in a time-adjacent
+later slide are dropped (`src/kotomka/ocr.py`), and the recognized text is passed
+to the frame-scoring prompt and into `FrameSelection.ocr_text` for the report.
+Without ocrmac the step is a silent no-op.
+
 LLM frame scoring is batched across the full timeline:
 
 - `KOTOMKA_MAX_FRAMES_FOR_LLM`: batch size for one scoring request.

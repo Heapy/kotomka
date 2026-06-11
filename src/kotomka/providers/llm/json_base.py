@@ -231,7 +231,11 @@ class JsonLlmProviderBase(LlmProvider):
 
 
 def candidate_frame_label(frame: CandidateFrame) -> str:
-    return f"frame_id={frame.frame_id} timestamp_s={frame.timestamp_s}"
+    label = f"frame_id={frame.frame_id} timestamp_s={frame.timestamp_s}"
+    if frame.ocr_text:
+        snippet = " ".join(frame.ocr_text.split())[:200]
+        label += f' ocr="{snippet}"'
+    return label
 
 
 def selection_label(selection: FrameSelection) -> str:
@@ -409,6 +413,7 @@ def frame_selections_from_payload(payload: dict[str, Any], frames: list[Candidat
             continue
         if score < MIN_FRAME_SCORE:
             continue
+        model_ocr = item.get("ocr_text") if isinstance(item.get("ocr_text"), str) else None
         selections.append(
             FrameSelection(
                 frame_id=frame.frame_id,
@@ -418,7 +423,7 @@ def frame_selections_from_payload(payload: dict[str, Any], frames: list[Candidat
                 score=score,
                 caption=str(item.get("caption") or ""),
                 reason=str(item.get("reason") or ""),
-                ocr_text=item.get("ocr_text") if isinstance(item.get("ocr_text"), str) else None,
+                ocr_text=model_ocr or frame.ocr_text,
             )
         )
     return sorted(selections, key=lambda item: item.timestamp_s)

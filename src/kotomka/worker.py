@@ -7,6 +7,7 @@ from threading import Event, Thread
 from .config import Settings
 from .media import extract_candidate_frames
 from .models import CandidateFrame, FrameSelection, Transcript
+from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
 from .providers.llm.base import LlmProvider
 from .providers.llm import get_llm_provider
 from .providers.stt import get_stt_provider
@@ -82,6 +83,9 @@ class JobWorker:
                 plateau_hash_distance=self.settings.frame_plateau_hash_distance,
                 blur_threshold=self.settings.frame_blur_threshold,
             )
+            if frames and self.settings.frame_ocr_enabled and ocr_available():
+                self.store.update_job(job_id, progress=55, message="Reading slide text")
+                frames = dedupe_ocr_supersets(annotate_frames_with_ocr(frames))
             write_json(job.artifact_dir / "frames.json", [frame.model_dump() for frame in frames])
 
             self.store.update_job(job_id, progress=65, message="Scoring useful frames")

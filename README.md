@@ -10,6 +10,10 @@ uv sync --extra dev
 uv run kotomka serve
 ```
 
+On macOS, add `--extra ocr` to enable Apple Vision OCR of slide frames
+(smarter dedupe of bullet-build slides and OCR-grounded captions); without it
+the pipeline runs the same minus OCR.
+
 Open <http://127.0.0.1:8000>.
 
 The service works without external AI keys by using fake providers. For live

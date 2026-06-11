@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     frame_plateau_hash_distance: int = 3
     # 0.0 disables the blur gate; calibrate on real talks before enabling.
     frame_blur_threshold: float = 0.0
+    # No-op unless the `ocr` extra (ocrmac, macOS) is installed.
+    frame_ocr_enabled: bool = True
     max_video_duration_seconds: int = 2 * 60 * 60
     max_frames_for_llm: int = 24
     max_selected_frames: int = 24
