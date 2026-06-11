@@ -12,7 +12,8 @@ Main flow:
 3. `ffmpeg` extracts audio and candidate frames.
 4. `SttProvider` returns a normalized speaker-labeled `Transcript`.
 5. `LlmProvider` scores frames across the full timeline in batches and builds a structured `Report`.
-6. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
+6. `normalize_report` deterministically snaps citation timestamps to transcript segments, clamps out-of-range values, and drops unknown frame references before the report is saved.
+7. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 
 Important modules:
 

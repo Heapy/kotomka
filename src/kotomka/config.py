@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("KOTOMKA_CODEX_AUTH_FILE", "CODEX_SUBSCRIPTION_AUTH_FILE"),
     )
     assemblyai_poll_seconds: float = 3.0
+    citation_snap_tolerance_seconds: float = 5.0
 
     @property
     def db_path(self) -> Path:

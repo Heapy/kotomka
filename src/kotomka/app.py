@@ -16,7 +16,7 @@ from .models import JobCreate
 from .pdf import render_pdf, should_regenerate_pdf
 from .providers.llm import available_llm_providers
 from .providers.stt import available_stt_providers
-from .reporting import load_report
+from .reporting import CITATION_PATTERN, load_report
 from .storage import JobStore
 from .utils import format_timecode, read_json
 from .worker import JobWorker
@@ -209,7 +209,6 @@ def _citation_links(text: str, url: str | None) -> Markup:
     escaped = escape(text)
     if not url:
         return Markup(escaped)
-    pattern = re.compile(r"\[((?:\d+(?:\.\d+)?\s*,\s*)*\d+(?:\.\d+)?)\]")
 
     def replace(match: re.Match[str]) -> str:
         values = [value.strip() for value in match.group(1).split(",")]
@@ -221,7 +220,7 @@ def _citation_links(text: str, url: str | None) -> Markup:
             links.append(f'<a class="time-link" href="{href}">{label}</a>')
         return "[" + ", ".join(links) + "]"
 
-    return Markup(pattern.sub(replace, str(escaped)))
+    return Markup(CITATION_PATTERN.sub(replace, str(escaped)))
 
 
 def _job_display_title(job) -> str:

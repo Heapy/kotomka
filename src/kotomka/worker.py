@@ -10,7 +10,7 @@ from .models import CandidateFrame, FrameSelection, Transcript
 from .providers.llm.base import LlmProvider
 from .providers.llm import get_llm_provider
 from .providers.stt import get_stt_provider
-from .reporting import save_report
+from .reporting import normalize_report, save_report
 from .source import SourceProvider, YtDlpSourceProvider
 from .storage import JobStore
 from .utils import write_json
@@ -96,6 +96,7 @@ class JobWorker:
                 frames=selected_frames,
                 output_language=job.input.output_language,
             )
+            report = normalize_report(report, tolerance_s=self.settings.citation_snap_tolerance_seconds)
             report_path = job.artifact_dir / "report.json"
             save_report(report, report_path)
             self.store.update_job(
