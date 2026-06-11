@@ -46,7 +46,9 @@ does not provide audio transcription; STT remains a separate pluggable provider.
 3. `fake`.
 
 `KOTOMKA_STT_PROVIDER` defaults to `fake`. Set it to `assemblyai` for live
-speaker-labeled transcription.
+speaker-labeled transcription, or to `whisper` for offline transcription with
+faster-whisper (`uv sync --extra whisper`; first run downloads model weights;
+no speaker diarization).
 
 ## Tests
 

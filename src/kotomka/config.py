@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     assemblyai_poll_seconds: float = 3.0
     citation_snap_tolerance_seconds: float = 5.0
     stt_keyterms_max: int = 200
+    whisper_model: str = "large-v3"
+    whisper_compute_type: str = "auto"
 
     @property
     def db_path(self) -> Path:

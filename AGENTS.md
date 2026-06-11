@@ -34,7 +34,7 @@ Important modules:
 - `src/kotomka/media.py`: ffmpeg audio/frame extraction and perceptual-hash dedupe.
 - `src/kotomka/models.py`: normalized schemas for jobs, transcript, frames, and reports.
   `VideoMetadata` carries yt-dlp metadata (description, tags, upload date, language, channel, chapters) used by STT keyterms, report grounding, and frame selection.
-- `src/kotomka/providers/stt/`: `fake` and `assemblyai` STT providers.
+- `src/kotomka/providers/stt/`: `fake`, `assemblyai`, and optional `whisper` STT providers.
 - `src/kotomka/providers/llm/`: `fake`, OpenAI Platform, and Codex subscription providers.
   Shared prompt/schema orchestration lives in `json_base.py` (`JsonLlmProviderBase`);
   OpenAI and Codex implement only the `_request_json` transport (OpenAI: strict
@@ -73,6 +73,11 @@ STT providers:
   job provides it. A 400 naming an optional parameter triggers one retry with a
   minimal request body. The raw completed payload is saved to
   `transcript_raw.json`.
+- `whisper`: offline faster-whisper transcription, available only when the
+  `whisper` extra is installed (`uv sync --extra whisper`; first run downloads
+  model weights, `KOTOMKA_WHISPER_MODEL`, default `large-v3`). No diarization:
+  all segments are `Speaker 1`. Useful as an A/B baseline for languages outside
+  AssemblyAI's best-model coverage (e.g. Russian).
 
 LLM providers:
 
