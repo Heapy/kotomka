@@ -33,6 +33,7 @@ class JobStore:
                 CREATE TABLE IF NOT EXISTS jobs (
                     id TEXT PRIMARY KEY,
                     status TEXT NOT NULL,
+                    is_read INTEGER NOT NULL DEFAULT 0,
                     progress INTEGER NOT NULL,
                     message TEXT NOT NULL,
                     error TEXT,
@@ -44,6 +45,9 @@ class JobStore:
                 )
                 """
             )
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+            if "is_read" not in columns:
+                conn.execute("ALTER TABLE jobs ADD COLUMN is_read INTEGER NOT NULL DEFAULT 0")
             conn.commit()
 
     def create_job(self, payload: JobCreate) -> JobRecord:
@@ -55,13 +59,14 @@ class JobStore:
             conn.execute(
                 """
                 INSERT INTO jobs (
-                    id, status, progress, message, error, created_at, updated_at,
+                    id, status, is_read, progress, message, error, created_at, updated_at,
                     input_json, artifact_dir, result_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
                     "queued",
+                    0,
                     0,
                     "Queued",
                     None,
@@ -89,10 +94,13 @@ class JobStore:
             ).fetchall()
         return [str(row["id"]) for row in rows]
 
-    def list_jobs(self, *, limit: int = 100) -> list[JobRecord]:
+    def list_jobs(self, *, limit: int = 100, include_read: bool = False) -> list[JobRecord]:
+        query = "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?"
+        if not include_read:
+            query = "SELECT * FROM jobs WHERE is_read = 0 ORDER BY created_at DESC LIMIT ?"
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?",
+                query,
                 (max(1, int(limit)),),
             ).fetchall()
         return [self._row_to_job(row) for row in rows]
@@ -142,10 +150,21 @@ class JobStore:
             conn.execute(
                 """
                 UPDATE jobs
-                SET status = ?, progress = ?, message = ?, error = ?, updated_at = ?, input_json = ?, result_json = ?
+                SET status = ?, is_read = ?, progress = ?, message = ?, error = ?, updated_at = ?, input_json = ?, result_json = ?
                 WHERE id = ?
                 """,
-                ("queued", 0, "Queued", None, now, next_input.model_dump_json(), None, current.id),
+                ("queued", 0, 0, "Queued", None, now, next_input.model_dump_json(), None, current.id),
+            )
+            conn.commit()
+        return self.get_job(job_id)
+
+    def set_job_read(self, job_id: str, is_read: bool) -> JobRecord:
+        self.get_job(job_id)
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE jobs SET is_read = ?, updated_at = ? WHERE id = ?",
+                (1 if is_read else 0, now, job_id),
             )
             conn.commit()
         return self.get_job(job_id)
@@ -168,6 +187,7 @@ class JobStore:
         return JobRecord(
             id=str(row["id"]),
             status=row["status"],
+            is_read=bool(row["is_read"]),
             progress=int(row["progress"]),
             message=str(row["message"]),
             error=row["error"],

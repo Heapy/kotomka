@@ -39,6 +39,7 @@ class JobCreate(BaseModel):
 class JobRecord(BaseModel):
     id: str
     status: JobStatus
+    is_read: bool = False
     progress: int = 0
     message: str = ""
     error: str | None = None
@@ -137,4 +138,3 @@ class Report(BaseModel):
     transcript: Transcript
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     output_language: str = "ru"
-

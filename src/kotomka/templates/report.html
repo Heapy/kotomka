@@ -8,6 +8,10 @@
       <h1>{{ report.video.title }}</h1>
     </div>
     <div class="button-row">
+      <form method="post" action="{{ url_for('job_read', job_id=job.id) }}">
+        <input type="hidden" name="is_read" value="{% if job.is_read %}false{% else %}true{% endif %}">
+        <button class="secondary-button" type="submit">{% if job.is_read %}Mark unread{% else %}Mark read{% endif %}</button>
+      </form>
       <form method="post" action="{{ url_for('job_retry', job_id=job.id) }}">
         <input type="hidden" name="use_current_defaults" value="true">
         <button class="secondary-button" type="submit">Reprocess</button>

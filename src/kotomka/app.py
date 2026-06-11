@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import re
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
@@ -59,12 +60,12 @@ def index(request: Request) -> HTMLResponse:
 
 
 @app.get("/jobs", response_class=HTMLResponse, name="jobs_index")
-def jobs_index(request: Request) -> HTMLResponse:
-    jobs = store.list_jobs(limit=200)
+def jobs_index(request: Request, show_read: bool = False) -> HTMLResponse:
+    jobs = store.list_jobs(limit=200, include_read=show_read)
     rows = []
     for job in jobs:
         rows.append({"job": job, "title": _job_display_title(job)})
-    return templates.TemplateResponse(request, "jobs.html", {"rows": rows})
+    return templates.TemplateResponse(request, "jobs.html", {"rows": rows, "show_read": show_read})
 
 
 @app.post("/api/jobs")
@@ -102,6 +103,7 @@ def get_job_api(job_id: str) -> JSONResponse:
         {
             "id": job.id,
             "status": job.status,
+            "is_read": job.is_read,
             "progress": job.progress,
             "message": job.message,
             "error": job.error,
@@ -125,13 +127,34 @@ def retry_job(request: Request, job_id: str, use_current_defaults: bool = Form(F
     return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
 
 
+@app.post("/jobs/{job_id}/read", name="job_read")
+def set_job_read(
+    request: Request,
+    job_id: str,
+    is_read: bool = Form(True),
+    return_to: str = Form("report"),
+    show_read: bool = Form(False),
+) -> RedirectResponse:
+    _get_job_or_404(job_id)
+    store.set_job_read(job_id, is_read)
+    if return_to == "jobs":
+        target = str(request.url_for("jobs_index"))
+        if show_read:
+            target = f"{target}?{urlencode({'show_read': '1'})}"
+        return RedirectResponse(target, status_code=303)
+    return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
+
+
 @app.post("/jobs/{job_id}/delete", name="job_delete")
-def delete_job(request: Request, job_id: str) -> RedirectResponse:
+def delete_job(request: Request, job_id: str, show_read: bool = Form(False)) -> RedirectResponse:
     job = _get_job_or_404(job_id)
     if job.status not in {"completed", "failed"}:
         return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
     store.delete_job(job_id)
-    return RedirectResponse(str(request.url_for("jobs_index")), status_code=303)
+    target = str(request.url_for("jobs_index"))
+    if show_read:
+        target = f"{target}?{urlencode({'show_read': '1'})}"
+    return RedirectResponse(target, status_code=303)
 
 
 @app.get("/jobs/{job_id}", response_class=HTMLResponse, name="job_report")

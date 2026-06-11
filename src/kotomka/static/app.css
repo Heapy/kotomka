@@ -345,6 +345,31 @@ summary {
   overflow-x: auto;
 }
 
+.jobs-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.checkbox-toggle label {
+  display: flex;
+  min-height: 42px;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.checkbox-toggle input[type="checkbox"] {
+  width: 18px;
+  min-height: 18px;
+  margin: 0;
+}
+
 .jobs-table {
   width: 100%;
   border-collapse: collapse;
@@ -399,6 +424,36 @@ summary {
   background: var(--accent);
 }
 
+.read-pill {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  background: #eef2f5;
+  white-space: nowrap;
+}
+
+.read-yes {
+  color: var(--muted);
+}
+
+.read-no {
+  color: var(--accent);
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.table-actions .secondary-button,
+.table-actions .danger-button {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
 @media (max-width: 720px) {
   .grid-2,
   .transcript-row {
@@ -414,6 +469,10 @@ summary {
 
   .page {
     padding: 18px 12px 40px;
+  }
+
+  .jobs-header-actions {
+    justify-content: flex-start;
   }
 }
 

@@ -12,7 +12,7 @@ Main flow:
 3. `ffmpeg` extracts audio and candidate frames.
 4. `SttProvider` returns a normalized speaker-labeled `Transcript`.
 5. `LlmProvider` scores frames across the full timeline in batches and builds a structured `Report`.
-6. FastAPI renders status, report, job list, assets, retry/reprocess/delete, and PDF endpoints.
+6. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 
 Important modules:
 
@@ -38,6 +38,10 @@ Generated data is intentionally local and ignored by git:
 
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
 Active jobs are not deletable from the UI to avoid racing the worker.
+
+Jobs also have an `is_read` state stored in SQLite. New and retried jobs are
+unread by default. `/jobs` hides read jobs unless `show_read=1` is present, and
+`POST /jobs/{job_id}/read` toggles the state from the list or report page.
 
 ## Providers
 
@@ -126,4 +130,3 @@ uv run kotomka serve --port 8001
 ## Maintenance Rule
 
 When changing architecture, provider behavior, artifact layout, job lifecycle, frame-selection policy, PDF rendering strategy, or public routes, update this `AGENTS.md` in the same change.
-

@@ -7,7 +7,15 @@
       <p class="eyebrow">History</p>
       <h1>Jobs</h1>
     </div>
-    <a class="primary-button" href="/">New job</a>
+    <div class="jobs-header-actions">
+      <form class="checkbox-toggle" method="get" action="{{ url_for('jobs_index') }}">
+        <label>
+          <input type="checkbox" name="show_read" value="1" {% if show_read %}checked{% endif %} onchange="if (this.checked) this.form.submit(); else window.location.href = '{{ url_for('jobs_index') }}';">
+          <span>Show read</span>
+        </label>
+      </form>
+      <a class="primary-button" href="/">New job</a>
+    </div>
   </div>
 
   <div class="panel jobs-table-panel">
@@ -18,6 +26,7 @@
             <th>Job</th>
             <th>Source</th>
             <th>Status</th>
+            <th>Read</th>
             <th>Progress</th>
             <th>Updated</th>
             <th>Actions</th>
@@ -36,26 +45,44 @@
               </td>
               <td><span class="status-pill status-{{ job.status }}">{{ job.status }}</span></td>
               <td>
+                <span class="read-pill {% if job.is_read %}read-yes{% else %}read-no{% endif %}">
+                  {% if job.is_read %}Read{% else %}Unread{% endif %}
+                </span>
+              </td>
+              <td>
                 <div class="mini-progress-track">
                   <div class="mini-progress-bar" style="width: {{ job.progress }}%"></div>
                 </div>
               </td>
               <td>{{ job.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
               <td>
-                {% if job.status in ["completed", "failed"] %}
-                  <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
-                    <button class="danger-button" type="submit">Delete</button>
+                <div class="table-actions">
+                  <form method="post" action="{{ url_for('job_read', job_id=job.id) }}">
+                    <input type="hidden" name="is_read" value="{% if job.is_read %}false{% else %}true{% endif %}">
+                    <input type="hidden" name="return_to" value="jobs">
+                    {% if show_read %}
+                      <input type="hidden" name="show_read" value="true">
+                    {% endif %}
+                    <button class="secondary-button" type="submit">{% if job.is_read %}Mark unread{% else %}Mark read{% endif %}</button>
                   </form>
-                {% else %}
-                  <span class="muted">Active</span>
-                {% endif %}
+                  {% if job.status in ["completed", "failed"] %}
+                    <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
+                      {% if show_read %}
+                        <input type="hidden" name="show_read" value="true">
+                      {% endif %}
+                      <button class="danger-button" type="submit">Delete</button>
+                    </form>
+                  {% else %}
+                    <span class="muted">Active</span>
+                  {% endif %}
+                </div>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     {% else %}
-      <p class="muted">No jobs yet.</p>
+      <p class="muted">{% if show_read %}No jobs yet.{% else %}No unread jobs.{% endif %}</p>
     {% endif %}
   </div>
 </section>
