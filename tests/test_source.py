@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from kotomka.source import MAX_DESCRIPTION_CHARS, _metadata_from_info
+from kotomka.source import MAX_DESCRIPTION_CHARS, _find_downloaded_video, _metadata_from_info
 
 
 def write_info(tmp_path: Path, data: dict) -> Path:
@@ -58,6 +58,14 @@ def test_metadata_from_info_missing_file(tmp_path: Path) -> None:
     metadata = _metadata_from_info(tmp_path / "absent.json", "https://example.com/v")
     assert metadata.title == "Untitled video"
     assert metadata.chapters == []
+
+
+def test_find_downloaded_video_ignores_audio_artifacts(tmp_path: Path) -> None:
+    (tmp_path / "source.mp4").write_bytes(b"v" * 10)
+    (tmp_path / "audio.flac").write_bytes(b"a" * 100)
+    (tmp_path / "audio.mp3").write_bytes(b"a" * 100)
+    (tmp_path / "source.info.json").write_text("{}", encoding="utf-8")
+    assert _find_downloaded_video(tmp_path).name == "source.mp4"
 
 
 def test_metadata_from_info_caps_description(tmp_path: Path) -> None:

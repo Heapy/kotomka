@@ -63,7 +63,7 @@ def extract_audio(video_path: Path, output_path: Path) -> Path:
             "-ar",
             "16000",
             "-codec:a",
-            "libmp3lame",
+            "flac",
             str(output_path),
         ]
     )

@@ -34,7 +34,8 @@ Generated data is intentionally local and ignored by git:
 
 - SQLite DB: `data/app.db`
 - Per-job artifacts: `data/jobs/{job_id}/`
-- Downloaded media: `media/source.*`, `media/audio.mp3`, `media/source.info.json`
+- Downloaded media: `media/source.*`, `media/audio.flac`, `media/source.info.json`
+  (jobs processed before the FLAC switch may still contain a legacy `media/audio.mp3`)
 - Frame candidates: `frames/*.png`
 - Structured artifacts: `transcript.json`, `frames.json`, `selected_frames.json`, `report.json`, `report.pdf`
 

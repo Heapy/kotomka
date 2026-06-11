@@ -61,4 +61,5 @@ def test_pipeline_fake_end_to_end(tmp_path: Path) -> None:
     assert report.summary
     assert report.transcript.segments
     assert (completed.artifact_dir / "frames.json").exists()
+    assert (completed.artifact_dir / "media" / "audio.flac").exists()
 

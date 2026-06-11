@@ -13,6 +13,9 @@ from .models import Chapter, JobCreate, SourceArtifact, VideoMetadata
 
 MAX_DESCRIPTION_CHARS = 4000
 
+# audio.mp3 is the pre-FLAC artifact name; reprocessed jobs may still have one on disk.
+AUDIO_ARTIFACT_NAMES = {"audio.flac", "audio.mp3"}
+
 
 class SourceProvider(ABC):
     @abstractmethod
@@ -50,7 +53,7 @@ class YtDlpSourceProvider(SourceProvider):
         metadata = _metadata_from_info(info_path, payload.source_url)
         duration = metadata.duration_s or ffprobe_duration(video_path)
         metadata.duration_s = duration
-        audio_path = extract_audio(video_path, media_dir / "audio.mp3")
+        audio_path = extract_audio(video_path, media_dir / "audio.flac")
         return SourceArtifact(metadata=metadata, video_path=video_path, audio_path=audio_path, info_path=info_path)
 
 
@@ -68,7 +71,7 @@ class LocalFileSourceProvider(SourceProvider):
         if source_path.resolve() != video_path.resolve():
             shutil.copy2(source_path, video_path)
         duration = ffprobe_duration(video_path)
-        audio_path = extract_audio(video_path, media_dir / "audio.mp3")
+        audio_path = extract_audio(video_path, media_dir / "audio.flac")
         metadata = VideoMetadata(source_url=payload.source_url, title=source_path.stem, duration_s=duration)
         return SourceArtifact(metadata=metadata, video_path=video_path, audio_path=audio_path)
 
@@ -76,7 +79,7 @@ class LocalFileSourceProvider(SourceProvider):
 def _find_downloaded_video(media_dir: Path) -> Path:
     ignored_suffixes = {".json", ".part", ".ytdl"}
     candidates = [path for path in media_dir.iterdir() if path.is_file() and path.suffix not in ignored_suffixes]
-    candidates = [path for path in candidates if not path.name.endswith(".info.json") and path.name != "audio.mp3"]
+    candidates = [path for path in candidates if not path.name.endswith(".info.json") and path.name not in AUDIO_ARTIFACT_NAMES]
     if not candidates:
         raise RuntimeError("yt-dlp did not produce a video file")
     return max(candidates, key=lambda path: path.stat().st_size)
