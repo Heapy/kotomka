@@ -31,11 +31,24 @@ does not provide audio transcription; STT remains a separate pluggable provider.
 
 ## Pipeline
 
-1. `yt-dlp` downloads the YouTube video and metadata.
-2. `ffmpeg` extracts audio and candidate frames.
-3. STT provider returns normalized speaker-labeled transcript.
-4. LLM/vision provider scores frames and generates the report JSON.
-5. FastAPI renders HTML and exports a cached PDF.
+1. `yt-dlp` downloads the video plus metadata (description, chapters, tags,
+   upload date, language); `ffmpeg` extracts mono 16 kHz FLAC audio.
+2. STT provider returns a normalized speaker-labeled transcript (AssemblyAI
+   requests current speech models with keyterm boosting derived from the video
+   metadata; the raw payload is kept as `transcript_raw.json`).
+3. Candidate frames come from slide-aware plateau detection, scene detection,
+   and gap filling; on macOS with the `ocr` extra they are OCR-annotated and
+   bullet-build slide sequences collapse to the final slide.
+4. The LLM scores frame batches against matching transcript windows, selection
+   guarantees at least one frame per chapter, and the winners are re-captioned
+   at high image detail.
+5. The report is generated in one pass for short videos or map-reduced through
+   chapter-aligned structured notes for long ones, with the selected frame
+   images attached. Citations are then snapped to real transcript timestamps.
+6. An assessment pass critiques originality, freshness (anchored to the upload
+   date, optionally web-grounded on the OpenAI provider), audience,
+   actionability, and whether the report replaces watching.
+7. FastAPI renders HTML and exports a cached PDF.
 
 ## Provider Defaults
 
@@ -49,6 +62,40 @@ does not provide audio transcription; STT remains a separate pluggable provider.
 speaker-labeled transcription, or to `whisper` for offline transcription with
 faster-whisper (`uv sync --extra whisper`; first run downloads model weights;
 no speaker diarization).
+
+## Configuration
+
+Settings come from `.env.local` / environment variables with the `KOTOMKA_`
+prefix. Everything has a sensible default; the most useful knobs:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `KOTOMKA_STT_PROVIDER` | `fake` | `fake`, `assemblyai`, or `whisper` |
+| `KOTOMKA_LLM_PROVIDER` | `auto` | `auto`, `fake`, `openai`, `codex_subscription` |
+| `KOTOMKA_OPENAI_MODEL` / `KOTOMKA_CODEX_MODEL` | `gpt-4.1` / `gpt-5.4` | report + assessment model |
+| `KOTOMKA_OPENAI_SCORING_MODEL` / `KOTOMKA_CODEX_SCORING_MODEL` | unset | cheaper model for frame scoring (falls back to the main model) |
+| `KOTOMKA_REPORT_MAX_IMAGES` | `16` | selected frame images attached to the report call |
+| `KOTOMKA_REPORT_SINGLE_PASS_MAX_CHARS` | `24000` | transcripts longer than this are map-reduced |
+| `KOTOMKA_REPORT_CHUNK_TARGET_SECONDS` | `600` | map-reduce chunk size |
+| `KOTOMKA_ASSESSMENT_ENABLED` | `true` | originality/freshness/usefulness pass |
+| `KOTOMKA_ASSESSMENT_WEB_SEARCH` | `false` | ground the assessment with OpenAI web search (openai provider only) |
+| `KOTOMKA_RECAPTION_SELECTED_FRAMES` | `true` | high-detail re-caption of selected frames |
+| `KOTOMKA_FRAME_MAX_GAP_SECONDS` | `60` | guaranteed candidate-frame coverage |
+| `KOTOMKA_FRAME_PLATEAU_MIN_DWELL_SECONDS` | `3.0` | minimum slide dwell to count as a plateau |
+| `KOTOMKA_FRAME_BLUR_THRESHOLD` | `0` | blur gate for candidates (0 = off) |
+| `KOTOMKA_FRAME_OCR_ENABLED` | `true` | OCR annotation when the `ocr` extra is installed |
+| `KOTOMKA_STT_KEYTERMS_MAX` | `200` | keyterm boost cap for AssemblyAI |
+| `KOTOMKA_WHISPER_MODEL` | `large-v3` | faster-whisper model size |
+
+Example `.env.local`:
+
+```dotenv
+ASSEMBLYAI_API_KEY=...
+OPENAI_API_KEY=...
+KOTOMKA_STT_PROVIDER=assemblyai
+KOTOMKA_LLM_PROVIDER=auto
+KOTOMKA_ASSESSMENT_WEB_SEARCH=1
+```
 
 ## Tests
 

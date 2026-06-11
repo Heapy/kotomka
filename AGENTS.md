@@ -8,22 +8,32 @@ The default runtime is local-first for media processing and pluggable for AI pro
 Main flow:
 
 1. `POST /api/jobs` or the `/` form creates a SQLite-backed job.
-2. `JobWorker` downloads or copies media through `SourceProvider`.
-3. `ffmpeg` extracts audio and candidate frames.
-4. `SttProvider` returns a normalized speaker-labeled `Transcript`.
-5. `LlmProvider` scores frames across the full timeline in batches and builds a structured `Report`.
-   Long transcripts (over `KOTOMKA_REPORT_SINGLE_PASS_MAX_CHARS`) are map-reduced: chapter-aligned
-   chunks are distilled into structured notes (saved as `notes.json`), then synthesized into the
-   report together with the selected frame images. The report pass can also map diarization labels
-   to real speaker names, which are applied to the report's embedded transcript copy
-   (`transcript.json` keeps the raw labels and word-level data; the report copy drops words).
-6. `normalize_report` deterministically snaps citation timestamps to transcript segments, clamps out-of-range values, and drops unknown frame references before the report is saved.
-7. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the finished report:
-   originality, freshness anchored to the upload date (with stale-claim flags), audience,
-   actionability, insight density, and a verdict. `KOTOMKA_ASSESSMENT_WEB_SEARCH=1` adds the
-   OpenAI web_search tool to this call; the Codex transport has no tools support and silently
-   ignores the flag. Assessment failures never fail the job.
-8. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
+2. `JobWorker` downloads or copies media through `SourceProvider`; `ffmpeg` extracts
+   mono 16 kHz FLAC audio, and yt-dlp metadata (description, tags, upload date,
+   language, chapters) is carried into `VideoMetadata`.
+3. `SttProvider` returns a normalized speaker-labeled `Transcript`; the raw provider
+   payload is saved as `transcript_raw.json`.
+4. Candidate frames come from plateau detection, scene detection, and gap filling
+   (see Frame Selection below); with the `ocr` extra they are OCR-annotated and
+   bullet-build duplicates collapse.
+5. `LlmProvider` scores frame batches against time-windowed transcript excerpts;
+   selection guarantees chapter coverage; the winners are optionally re-captioned
+   at high image detail.
+6. `LlmProvider` builds the `Report`. Long transcripts (over
+   `KOTOMKA_REPORT_SINGLE_PASS_MAX_CHARS`) are map-reduced: chapter-aligned chunks
+   are distilled into structured notes (saved as `notes.json`), then synthesized
+   together with the selected frame images. The report pass can map diarization
+   labels to real speaker names, applied to the report's embedded transcript copy
+   (`transcript.json` keeps raw labels and word-level data; the report copy drops words).
+7. `normalize_report` deterministically snaps citation timestamps to transcript
+   segments, clamps out-of-range values, and drops unknown frame references.
+8. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the
+   finished report: originality, freshness anchored to the upload date (with
+   stale-claim flags), audience, actionability, insight density, and a verdict.
+   `KOTOMKA_ASSESSMENT_WEB_SEARCH=1` adds the OpenAI web_search tool to this call;
+   the Codex transport has no tools support and silently ignores the flag.
+   Assessment failures never fail the job.
+9. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 
 Important modules:
 
