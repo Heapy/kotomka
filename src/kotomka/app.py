@@ -83,6 +83,7 @@ def create_job_form(
     stt_provider: str = Form(""),
     llm_provider: str = Form(""),
     cookies_from_browser: str = Form(""),
+    speakers_expected: str = Form(""),
 ) -> RedirectResponse:
     payload = JobCreate(
         source_url=source_url,
@@ -90,6 +91,7 @@ def create_job_form(
         stt_provider=stt_provider or None,
         llm_provider=llm_provider or None,
         cookies_from_browser=cookies_from_browser or None,
+        speakers_expected=int(speakers_expected) if speakers_expected.strip() else None,
     )
     job = store.create_job(payload)
     worker.enqueue(job.id)

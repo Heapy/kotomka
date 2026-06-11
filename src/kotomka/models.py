@@ -16,6 +16,16 @@ class JobCreate(BaseModel):
     stt_provider: str | None = None
     llm_provider: str | None = None
     cookies_from_browser: str | None = None
+    speakers_expected: int | None = None
+
+    @field_validator("speakers_expected")
+    @classmethod
+    def validate_speakers_expected(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not 1 <= value <= 10:
+            raise ValueError("speakers_expected must be between 1 and 10")
+        return value
 
     @field_validator("source_url")
     @classmethod

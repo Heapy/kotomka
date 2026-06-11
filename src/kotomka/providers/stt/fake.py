@@ -3,14 +3,24 @@ from __future__ import annotations
 from pathlib import Path
 
 from ...models import Transcript, TranscriptSegment, VideoMetadata
+from ...utils import write_json
 from .base import SttProvider
 
 
 class FakeSttProvider(SttProvider):
     name = "fake"
 
-    def transcribe(self, audio_path: Path, metadata: VideoMetadata) -> Transcript:
-        del audio_path
+    def transcribe(
+        self,
+        audio_path: Path,
+        metadata: VideoMetadata,
+        *,
+        speakers_expected: int | None = None,
+        raw_path: Path | None = None,
+    ) -> Transcript:
+        del audio_path, speakers_expected
+        if raw_path is not None:
+            write_json(raw_path, {"provider": "fake", "note": "offline transcript, no raw payload"})
         duration = max(60.0, float(metadata.duration_s or 180.0))
         speakers = ["Speaker A", "Speaker B"]
         segments = [

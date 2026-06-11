@@ -7,8 +7,24 @@ from typing import Any
 
 import httpx
 
+from ...config import get_settings
 from ...models import Transcript, TranscriptSegment, TranscriptWord, VideoMetadata
+from ...utils import write_json
 from .base import SttProvider
+from .keyterms import extract_keyterms
+
+UPLOAD_URL = "https://api.assemblyai.com/v2/upload"
+TRANSCRIPT_URL = "https://api.assemblyai.com/v2/transcript"
+
+# Support for these varies by account and routed speech model; a 400 naming one
+# of them triggers a single retry with the minimal request body.
+OPTIONAL_REQUEST_KEYS = (
+    "speech_models",
+    "keyterms_prompt",
+    "entity_detection",
+    "speakers_expected",
+    "language_code",
+)
 
 
 class AssemblyAiSttProvider(SttProvider):
@@ -17,37 +33,97 @@ class AssemblyAiSttProvider(SttProvider):
     def __init__(self, *, poll_seconds: float = 3.0) -> None:
         self.poll_seconds = poll_seconds
 
-    def transcribe(self, audio_path: Path, metadata: VideoMetadata) -> Transcript:
+    def transcribe(
+        self,
+        audio_path: Path,
+        metadata: VideoMetadata,
+        *,
+        speakers_expected: int | None = None,
+        raw_path: Path | None = None,
+    ) -> Transcript:
         api_key = os.getenv("ASSEMBLYAI_API_KEY", "").strip()
         if not api_key:
             raise RuntimeError("ASSEMBLYAI_API_KEY is required for stt_provider=assemblyai")
         headers = {"authorization": api_key}
+        keyterms = extract_keyterms(metadata, max_terms=get_settings().stt_keyterms_max)
         with httpx.Client(timeout=httpx.Timeout(60.0, read=120.0)) as client:
             with audio_path.open("rb") as handle:
-                upload_response = client.post("https://api.assemblyai.com/v2/upload", headers=headers, content=handle)
+                upload_response = client.post(UPLOAD_URL, headers=headers, content=handle)
             upload_response.raise_for_status()
             audio_url = upload_response.json()["upload_url"]
-            start_response = client.post(
-                "https://api.assemblyai.com/v2/transcript",
-                headers={**headers, "content-type": "application/json"},
-                json={
-                    "audio_url": audio_url,
-                    "speaker_labels": True,
-                    "language_detection": True,
-                },
+            request = build_transcription_request(
+                audio_url,
+                metadata,
+                speakers_expected=speakers_expected,
+                keyterms=keyterms,
             )
-            start_response.raise_for_status()
-            transcript_id = start_response.json()["id"]
+            transcript_id = self._start_transcription(client, headers, request, audio_url)
             while True:
-                poll_response = client.get(f"https://api.assemblyai.com/v2/transcript/{transcript_id}", headers=headers)
+                poll_response = client.get(f"{TRANSCRIPT_URL}/{transcript_id}", headers=headers)
                 poll_response.raise_for_status()
                 payload = poll_response.json()
                 status = payload.get("status")
                 if status == "completed":
+                    if raw_path is not None:
+                        write_json(raw_path, payload)
                     return assemblyai_payload_to_transcript(payload, fallback_duration=metadata.duration_s)
                 if status == "error":
                     raise RuntimeError(f"AssemblyAI transcription failed: {payload.get('error')}")
                 time.sleep(self.poll_seconds)
+
+    def _start_transcription(
+        self,
+        client: httpx.Client,
+        headers: dict[str, str],
+        request: dict[str, Any],
+        audio_url: str,
+    ) -> str:
+        json_headers = {**headers, "content-type": "application/json"}
+        response = client.post(TRANSCRIPT_URL, headers=json_headers, json=request)
+        if response.status_code == 400 and _mentions_optional_key(response.text):
+            response = client.post(
+                TRANSCRIPT_URL,
+                headers=json_headers,
+                json={"audio_url": audio_url, "speaker_labels": True, "language_detection": True},
+            )
+        response.raise_for_status()
+        return response.json()["id"]
+
+
+def build_transcription_request(
+    audio_url: str,
+    metadata: VideoMetadata,
+    *,
+    speakers_expected: int | None,
+    keyterms: list[str],
+) -> dict[str, Any]:
+    request: dict[str, Any] = {
+        "audio_url": audio_url,
+        "speech_models": ["universal-3-pro", "universal-2"],
+        "speaker_labels": True,
+        "entity_detection": True,
+    }
+    language = _normalize_language(metadata.language)
+    if language:
+        request["language_code"] = language
+    else:
+        request["language_detection"] = True
+    if keyterms:
+        request["keyterms_prompt"] = keyterms
+    if speakers_expected:
+        request["speakers_expected"] = speakers_expected
+    return request
+
+
+def _mentions_optional_key(body: str) -> bool:
+    return any(key in body for key in OPTIONAL_REQUEST_KEYS)
+
+
+def _normalize_language(value: str | None) -> str | None:
+    primary = (value or "").strip().split("-")[0].split("_")[0].lower()
+    if 2 <= len(primary) <= 3 and primary.isalpha():
+        return primary
+    return None
 
 
 def assemblyai_payload_to_transcript(payload: dict[str, Any], *, fallback_duration: float = 0) -> Transcript:
@@ -119,4 +195,3 @@ def _float_or_none(value: Any) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
-

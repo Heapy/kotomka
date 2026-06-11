@@ -37,7 +37,7 @@ Generated data is intentionally local and ignored by git:
 - Downloaded media: `media/source.*`, `media/audio.flac`, `media/source.info.json`
   (jobs processed before the FLAC switch may still contain a legacy `media/audio.mp3`)
 - Frame candidates: `frames/*.png`
-- Structured artifacts: `transcript.json`, `frames.json`, `selected_frames.json`, `report.json`, `report.pdf`
+- Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `report.json`, `report.pdf`
 
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
 Active jobs are not deletable from the UI to avoid racing the worker.
@@ -52,6 +52,13 @@ STT providers:
 
 - `fake`: offline test transcript.
 - `assemblyai`: live speaker-labeled transcription, requires `ASSEMBLYAI_API_KEY`.
+  Requests `speech_models: ["universal-3-pro", "universal-2"]`, entity detection,
+  an explicit `language_code` when video metadata carries one (else language
+  detection), keyterms extracted from title/chapters/tags/description
+  (`KOTOMKA_STT_KEYTERMS_MAX`, default 200), and `speakers_expected` when the
+  job provides it. A 400 naming an optional parameter triggers one retry with a
+  minimal request body. The raw completed payload is saved to
+  `transcript_raw.json`.
 
 LLM providers:
 

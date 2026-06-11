@@ -63,7 +63,12 @@ class JobWorker:
 
             self.store.update_job(job_id, progress=25, message="Transcribing audio")
             stt = get_stt_provider(job.input.stt_provider)
-            transcript = stt.transcribe(source.audio_path, source.metadata)
+            transcript = stt.transcribe(
+                source.audio_path,
+                source.metadata,
+                speakers_expected=job.input.speakers_expected,
+                raw_path=job.artifact_dir / "transcript_raw.json",
+            )
             write_json(job.artifact_dir / "transcript.json", transcript.model_dump())
 
             self.store.update_job(job_id, progress=50, message="Extracting and deduplicating frames")

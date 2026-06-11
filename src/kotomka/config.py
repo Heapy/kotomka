@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     )
     assemblyai_poll_seconds: float = 3.0
     citation_snap_tolerance_seconds: float = 5.0
+    stt_keyterms_max: int = 200
 
     @property
     def db_path(self) -> Path:
