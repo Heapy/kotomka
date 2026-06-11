@@ -12,6 +12,11 @@ Main flow:
 3. `ffmpeg` extracts audio and candidate frames.
 4. `SttProvider` returns a normalized speaker-labeled `Transcript`.
 5. `LlmProvider` scores frames across the full timeline in batches and builds a structured `Report`.
+   Long transcripts (over `KOTOMKA_REPORT_SINGLE_PASS_MAX_CHARS`) are map-reduced: chapter-aligned
+   chunks are distilled into structured notes (saved as `notes.json`), then synthesized into the
+   report together with the selected frame images. The report pass can also map diarization labels
+   to real speaker names, which are applied to the report's embedded transcript copy
+   (`transcript.json` keeps the raw labels and word-level data; the report copy drops words).
 6. `normalize_report` deterministically snaps citation timestamps to transcript segments, clamps out-of-range values, and drops unknown frame references before the report is saved.
 7. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 
@@ -41,7 +46,7 @@ Generated data is intentionally local and ignored by git:
 - Downloaded media: `media/source.*`, `media/audio.flac`, `media/source.info.json`
   (jobs processed before the FLAC switch may still contain a legacy `media/audio.mp3`)
 - Frame candidates: `frames/*.png`
-- Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `report.json`, `report.pdf`
+- Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `notes.json` (map-reduce runs only), `report.json`, `report.pdf`
 
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
 Active jobs are not deletable from the UI to avoid racing the worker.

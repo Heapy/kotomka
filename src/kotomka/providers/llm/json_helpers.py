@@ -68,7 +68,43 @@ REPORT_SCHEMA: dict[str, Any] = {
                 "required": ["title", "start_s", "end_s", "body", "frame_ids", "citations"],
             },
         },
+        "speaker_names": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "label": {"type": "string"},
+                    "name": {"type": "string"},
+                },
+                "required": ["label", "name"],
+            },
+        },
     },
-    "required": ["summary", "sections"],
+    "required": ["summary", "sections", "speaker_names"],
+}
+
+
+NOTES_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "chunk_summary": {"type": "string"},
+        "notes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "kind": {"type": "string"},
+                    "text": {"type": "string"},
+                    "timestamp_s": {"type": "number"},
+                    "importance": {"type": "number"},
+                },
+                "required": ["kind", "text", "timestamp_s", "importance"],
+            },
+        },
+    },
+    "required": ["chunk_summary", "notes"],
 }
 

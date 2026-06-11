@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import base64
 import json
+import traceback
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from pydantic import ValidationError
 
-from ...config import get_settings
+from ...config import Settings, get_settings
 from ...models import CandidateFrame, FrameSelection, Report, ReportSection, SourceArtifact, Transcript, VideoMetadata
-from ...transcripts import format_transcript, window_excerpt
+from ...transcripts import chunk_transcript, format_segment_line, format_transcript, window_excerpt
+from ...utils import write_json
 from .base import LlmProvider
-from .json_helpers import FRAME_SCORE_SCHEMA, REPORT_SCHEMA
-from .prompts import FRAME_SCORE_INSTRUCTIONS, REPORT_INSTRUCTIONS
+from .json_helpers import FRAME_SCORE_SCHEMA, NOTES_SCHEMA, REPORT_SCHEMA
+from .prompts import FRAME_SCORE_INSTRUCTIONS, NOTES_INSTRUCTIONS, REPORT_INSTRUCTIONS
 
 MIN_FRAME_SCORE = 0.45
 
@@ -100,22 +102,79 @@ class JsonLlmProviderBase(LlmProvider):
             transcript,
             low_confidence_below=settings.transcript_low_confidence_threshold,
         )
+        if len(transcript_text) <= settings.report_single_pass_max_chars:
+            knowledge = "Transcript:\n" + transcript_text
+        else:
+            knowledge = "Transcript notes by chunk:\n" + self._chunk_notes_text(source, transcript, work_dir, settings)
         payload = self._request_json(
             instructions=REPORT_INSTRUCTIONS,
-            text=json.dumps(context, ensure_ascii=False, default=str) + "\n\nTranscript:\n" + transcript_text,
+            text=json.dumps(context, ensure_ascii=False, default=str) + "\n\n" + knowledge,
             images=report_images(frames, work_dir, max_images=settings.report_max_images),
             image_detail=settings.report_image_detail,
             schema_name="video_report",
             schema=REPORT_SCHEMA,
         )
+        speaker_names = speaker_name_mapping(payload.get("speaker_names"))
         return Report(
             video=source.metadata,
             summary=str(payload.get("summary") or ""),
             sections=coerce_sections(payload.get("sections")),
             frames=frames,
-            transcript=transcript,
+            transcript=display_transcript(transcript, speaker_names),
             output_language=output_language,
         )
+
+    def _chunk_notes_text(
+        self,
+        source: SourceArtifact,
+        transcript: Transcript,
+        work_dir: Path | None,
+        settings: Settings,
+    ) -> str:
+        chunks = chunk_transcript(
+            transcript,
+            source.metadata.chapters,
+            target_seconds=settings.report_chunk_target_seconds,
+            duration_s=source.metadata.duration_s or transcript.duration_s,
+        )
+        collected: list[dict[str, Any]] = []
+        for index, chunk in enumerate(chunks):
+            chunk_text = "\n".join(
+                format_segment_line(segment, low_confidence_below=settings.transcript_low_confidence_threshold)
+                for segment in chunk.segments
+            )
+            header = {
+                "video_title": source.metadata.title,
+                "chunk_index": index + 1,
+                "chunk_count": len(chunks),
+                "chunk_title": chunk.title,
+                "start_s": chunk.start_s,
+                "end_s": chunk.end_s,
+            }
+            try:
+                payload = self._request_json(
+                    instructions=NOTES_INSTRUCTIONS,
+                    text=json.dumps(header, ensure_ascii=False) + "\n\nTranscript chunk:\n" + chunk_text,
+                    images=[],
+                    image_detail=settings.scoring_image_detail,
+                    schema_name="chunk_notes",
+                    schema=NOTES_SCHEMA,
+                )
+            except Exception:
+                # One unparseable chunk must not sink the whole report.
+                traceback.print_exc()
+                payload = {}
+            collected.append(
+                {
+                    "title": chunk.title,
+                    "start_s": chunk.start_s,
+                    "end_s": chunk.end_s,
+                    **coerce_notes(payload),
+                }
+            )
+        if work_dir is not None:
+            write_json(work_dir / "notes.json", collected)
+        return notes_to_text(collected)
 
 
 def candidate_frame_label(frame: CandidateFrame) -> str:
@@ -153,6 +212,74 @@ def metadata_summary(metadata: VideoMetadata) -> dict[str, Any]:
         ],
         "webpage_url": metadata.webpage_url,
     }
+
+
+def coerce_notes(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        payload = {}
+    notes: list[dict[str, Any]] = []
+    for item in payload.get("notes") or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        try:
+            timestamp = float(item.get("timestamp_s") or 0)
+            importance = float(item.get("importance") or 0)
+        except (TypeError, ValueError):
+            continue
+        notes.append(
+            {
+                "kind": str(item.get("kind") or "claim"),
+                "text": text,
+                "timestamp_s": timestamp,
+                "importance": importance,
+            }
+        )
+    return {"chunk_summary": str(payload.get("chunk_summary") or ""), "notes": notes}
+
+
+def notes_to_text(collected: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for index, chunk in enumerate(collected):
+        title = chunk.get("title") or "untitled"
+        lines.append(f"Chunk {index + 1}: {title} [{chunk.get('start_s', 0):.0f}-{chunk.get('end_s', 0):.0f}s]")
+        summary = str(chunk.get("chunk_summary") or "").strip()
+        if summary:
+            lines.append(f"Summary: {summary}")
+        for note in chunk.get("notes") or []:
+            lines.append(f"- [{note['timestamp_s']:.1f}] {note['kind']}: {note['text']}")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
+def speaker_name_mapping(items: Any) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    if not isinstance(items, list):
+        return mapping
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip()
+        name = str(item.get("name") or "").strip()
+        if label and name and label != name:
+            mapping[label] = name
+    return mapping
+
+
+def display_transcript(transcript: Transcript, speaker_names: dict[str, str]) -> Transcript:
+    """Transcript copy embedded in the report: real speaker names, no word arrays.
+
+    The word-level data stays in the transcript.json artifact; nothing in the
+    report rendering uses it and it inflates report.json by megabytes.
+    """
+    segments = [
+        segment.model_copy(update={"speaker": speaker_names.get(segment.speaker, segment.speaker), "words": None})
+        for segment in transcript.segments
+    ]
+    speakers = list(dict.fromkeys(speaker_names.get(speaker, speaker) for speaker in transcript.speakers))
+    return transcript.model_copy(update={"segments": segments, "speakers": speakers, "words": None})
 
 
 def coerce_sections(items: Any) -> list[ReportSection]:

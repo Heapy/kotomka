@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     scoring_image_detail: str = "low"
     report_image_detail: str = "high"
     report_max_images: int = 16
+    report_single_pass_max_chars: int = 24000
+    report_chunk_target_seconds: int = 600
     transcript_excerpt_margin_seconds: int = 30
     transcript_low_confidence_threshold: float = 0.5
     codex_auth_file: Path = Field(
