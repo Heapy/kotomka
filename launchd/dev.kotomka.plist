@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>dev.kotomka</string>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yoda/dev/pet/kotomka</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      <key>UV_CACHE_DIR</key>
+      <string>/Users/yoda/dev/pet/kotomka/.uv-cache</string>
+      <key>PYTHONUNBUFFERED</key>
+      <string>1</string>
+    </dict>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/opt/homebrew/bin/uv</string>
+      <string>run</string>
+      <string>kotomka</string>
+      <string>serve</string>
+      <string>--host</string>
+      <string>127.0.0.1</string>
+      <string>--port</string>
+      <string>8000</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/yoda/dev/pet/kotomka/data/launchd.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/yoda/dev/pet/kotomka/data/launchd.err.log</string>
+  </dict>
+</plist>
