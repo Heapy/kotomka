@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import traceback
 from queue import Empty, Queue
-from threading import Event, Thread
+from threading import Event, Semaphore, Thread
 
 from .config import Settings
 from .media import extract_candidate_frames
@@ -24,20 +24,29 @@ class JobWorker:
         self.source_provider = source_provider or YtDlpSourceProvider()
         self._queue: Queue[str] = Queue()
         self._stop = Event()
-        self._thread: Thread | None = None
+        self._threads: list[Thread] = []
+        # Downloads are bandwidth-bound and prone to tripping YouTube's bot
+        # detection when run concurrently, so only one runs at a time; other
+        # pipeline stages (transcription, frame extraction, LLM calls) are not
+        # serialized and run across the worker pool.
+        self._download_semaphore = Semaphore(1)
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
+        if self._threads and any(thread.is_alive() for thread in self._threads):
             return
-        self._thread = Thread(target=self._run, name="kotomka-worker", daemon=True)
-        self._thread.start()
+        pool_size = max(1, self.settings.worker_pool_size)
+        self._threads = [
+            Thread(target=self._run, name=f"kotomka-worker-{index}", daemon=True) for index in range(pool_size)
+        ]
+        for thread in self._threads:
+            thread.start()
         for job_id in self.store.list_requeueable_jobs():
             self.enqueue(job_id)
 
     def stop(self) -> None:
         self._stop.set()
-        if self._thread:
-            self._thread.join(timeout=5)
+        for thread in self._threads:
+            thread.join(timeout=5)
 
     def enqueue(self, job_id: str) -> None:
         self._queue.put(job_id)
@@ -57,7 +66,8 @@ class JobWorker:
         job = self.store.get_job(job_id)
         try:
             self.store.update_job(job_id, status="running", progress=5, message="Downloading video")
-            source = self.source_provider.fetch(job.input, job.artifact_dir)
+            with self._download_semaphore:
+                source = self.source_provider.fetch(job.input, job.artifact_dir)
             if source.metadata.duration_s > self.settings.max_video_duration_seconds:
                 raise RuntimeError("Video is longer than the configured 2 hour MVP limit")
             write_json(job.artifact_dir / "source.json", source.model_dump())

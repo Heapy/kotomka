@@ -46,6 +46,7 @@ class Settings(BaseSettings):
         default=Path("data/codex_subscription_auth.json"),
         validation_alias=AliasChoices("KOTOMKA_CODEX_AUTH_FILE", "CODEX_SUBSCRIPTION_AUTH_FILE"),
     )
+    worker_pool_size: int = 3
     assemblyai_poll_seconds: float = 3.0
     citation_snap_tolerance_seconds: float = 5.0
     stt_keyterms_max: int = 200

@@ -101,6 +101,7 @@ prefix. Everything has a sensible default; the most useful knobs:
 | `KOTOMKA_FRAME_OCR_ENABLED` | `true` | OCR annotation when the `ocr` extra is installed |
 | `KOTOMKA_STT_KEYTERMS_MAX` | `200` | keyterm boost cap for AssemblyAI |
 | `KOTOMKA_WHISPER_MODEL` | `large-v3` | faster-whisper model size |
+| `KOTOMKA_WORKER_POOL_SIZE` | `3` | concurrent jobs; downloads are still serialized to one at a time |
 
 Example `.env.local`:
 
