@@ -76,7 +76,7 @@ STT providers:
 
 - `fake`: offline test transcript.
 - `assemblyai`: live speaker-labeled transcription, requires `ASSEMBLYAI_API_KEY`.
-  Requests `speech_models: ["universal-3-pro", "universal-2"]`, entity detection,
+  Requests `speech_models: ["universal-3-5-pro", "universal-3-pro", "universal-2"]`, entity detection,
   an explicit `language_code` when video metadata carries one (else language
   detection), keyterms extracted from title/chapters/tags/description
   (`KOTOMKA_STT_KEYTERMS_MAX`, default 200), and `speakers_expected` when the

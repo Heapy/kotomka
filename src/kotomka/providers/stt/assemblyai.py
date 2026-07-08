@@ -99,7 +99,7 @@ def build_transcription_request(
 ) -> dict[str, Any]:
     request: dict[str, Any] = {
         "audio_url": audio_url,
-        "speech_models": ["universal-3-pro", "universal-2"],
+        "speech_models": ["universal-3-5-pro", "universal-3-pro", "universal-2"],
         "speaker_labels": True,
         "entity_detection": True,
     }

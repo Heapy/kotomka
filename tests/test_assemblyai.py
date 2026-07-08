@@ -48,7 +48,7 @@ def test_build_transcription_request_with_language_and_hints() -> None:
         speakers_expected=2,
         keyterms=["FastAPI"],
     )
-    assert request["speech_models"] == ["universal-3-pro", "universal-2"]
+    assert request["speech_models"] == ["universal-3-5-pro", "universal-3-pro", "universal-2"]
     assert request["speaker_labels"] is True
     assert request["entity_detection"] is True
     assert request["language_code"] == "en"
@@ -125,7 +125,7 @@ def test_transcribe_retries_minimal_request_and_saves_raw(tmp_path: Path, monkey
     assert start_route.call_count == 2
     first_body = json.loads(start_route.calls[0].request.content)
     second_body = json.loads(start_route.calls[1].request.content)
-    assert first_body["speech_models"] == ["universal-3-pro", "universal-2"]
+    assert first_body["speech_models"] == ["universal-3-5-pro", "universal-3-pro", "universal-2"]
     assert first_body["language_code"] == "en"
     assert first_body["speakers_expected"] == 2
     assert "Kafka Talk" in first_body["keyterms_prompt"]
