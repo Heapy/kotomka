@@ -147,15 +147,20 @@ class JobStore:
         next_input = payload or current.input
         now = datetime.now(timezone.utc).isoformat()
         with self._lock, self._connect() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
                 UPDATE jobs
                 SET status = ?, is_read = ?, progress = ?, message = ?, error = ?, updated_at = ?, input_json = ?, result_json = ?
-                WHERE id = ?
+                WHERE id = ? AND status IN ('failed', 'completed')
                 """,
                 ("queued", 0, 0, "Queued", None, now, next_input.model_dump_json(), None, current.id),
             )
             conn.commit()
+            if cursor.rowcount == 0:
+                # Either the job doesn't exist (already excluded by get_job above) or a
+                # concurrent retry already claimed it; the WHERE clause makes the
+                # check-and-flip atomic under self._lock, so only one caller wins.
+                raise ValueError(f"job {job_id} is not retryable from status {current.status!r}")
         return self.get_job(job_id)
 
     def set_job_read(self, job_id: str, is_read: bool) -> JobRecord:

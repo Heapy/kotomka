@@ -49,11 +49,38 @@ def test_retry_job_resets_read_state(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
     job = store.create_job(JobCreate(source_url="https://example.com/video"))
     store.set_job_read(job.id, True)
+    store.update_job(job.id, status="completed", progress=100, message="Completed")
 
     retried = store.retry_job(job.id)
 
     assert retried.is_read is False
     assert retried.status == "queued"
+
+
+def test_retry_job_rejects_queued_or_running_jobs(tmp_path: Path) -> None:
+    store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = store.create_job(JobCreate(source_url="https://example.com/video"))
+
+    with pytest.raises(ValueError):
+        store.retry_job(job.id)
+
+    store.update_job(job.id, status="running", progress=50, message="Working")
+    with pytest.raises(ValueError):
+        store.retry_job(job.id)
+
+    assert store.get_job(job.id).status == "running"
+
+
+def test_retry_job_is_atomic_against_concurrent_retries(tmp_path: Path) -> None:
+    store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = store.create_job(JobCreate(source_url="https://example.com/video"))
+    store.update_job(job.id, status="failed", progress=10, message="boom", error="boom")
+
+    first = store.retry_job(job.id)
+    assert first.status == "queued"
+
+    with pytest.raises(ValueError):
+        store.retry_job(job.id)
 
 
 def test_init_db_migrates_existing_jobs_to_unread(tmp_path: Path) -> None:

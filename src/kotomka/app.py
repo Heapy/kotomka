@@ -136,12 +136,13 @@ def get_job_api(job_id: str) -> JSONResponse:
 @app.post("/jobs/{job_id}/retry", name="job_retry")
 def retry_job(request: Request, job_id: str, use_current_defaults: bool = Form(False)) -> RedirectResponse:
     job = _get_job_or_404(job_id)
-    if job.status not in {"failed", "completed"}:
-        return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
     payload = None
     if use_current_defaults:
         payload = job.input.model_copy(update={"stt_provider": None, "llm_provider": None})
-    retried = store.retry_job(job_id, payload=payload)
+    try:
+        retried = store.retry_job(job_id, payload=payload)
+    except ValueError:
+        return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
     worker.enqueue(retried.id)
     return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
 
