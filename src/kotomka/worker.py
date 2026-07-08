@@ -34,6 +34,7 @@ class JobWorker:
     def start(self) -> None:
         if self._threads and any(thread.is_alive() for thread in self._threads):
             return
+        self._stop.clear()
         pool_size = max(1, self.settings.worker_pool_size)
         self._threads = [
             Thread(target=self._run, name=f"kotomka-worker-{index}", daemon=True) for index in range(pool_size)

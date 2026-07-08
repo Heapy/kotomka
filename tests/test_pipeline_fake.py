@@ -161,3 +161,20 @@ def test_worker_pool_serializes_downloads(tmp_path: Path) -> None:
     assert len(starts) == 2 and len(ends) == 2
     # The second download must not begin until the first one has finished.
     assert starts[1] >= ends[0]
+
+
+def test_worker_restarts_after_stop(tmp_path: Path) -> None:
+    _, worker = make_worker(tmp_path)
+
+    worker.start()
+    try:
+        assert worker._threads and all(thread.is_alive() for thread in worker._threads)
+    finally:
+        worker.stop()
+    assert all(not thread.is_alive() for thread in worker._threads)
+
+    worker.start()
+    try:
+        assert all(thread.is_alive() for thread in worker._threads)
+    finally:
+        worker.stop()
