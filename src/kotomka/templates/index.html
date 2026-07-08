@@ -24,9 +24,19 @@
       </label>
       <label>
         <span>Cookies browser</span>
-        <input name="cookies_from_browser" placeholder="chrome, firefox, safari">
+        <select name="cookies_from_browser">
+          <option value="">No browser cookies</option>
+          {% for browser in cookie_browsers %}
+            <option value="{{ browser }}" {% if browser == default_cookie_browser %}selected{% endif %}>{{ browser }}</option>
+          {% endfor %}
+        </select>
       </label>
     </div>
+
+    <label>
+      <span>Cookies file</span>
+      <input name="cookies_file" placeholder="/Users/me/Downloads/youtube-cookies.txt">
+    </label>
 
     <details>
       <summary>Providers</summary>
@@ -61,4 +71,3 @@
   </form>
 </section>
 {% endblock %}
-

@@ -98,6 +98,15 @@ LLM providers:
 Provider defaults are configured through `.env.local` and `KOTOMKA_*` settings.
 Do not print secret values in logs, tests, or terminal output.
 
+YouTube downloads can use either `JobCreate.cookies_from_browser` (yt-dlp
+`--cookies-from-browser`, e.g. `firefox` or `chrome:Profile 1`) or
+`JobCreate.cookies_file` (yt-dlp `--cookies` with a Netscape-format
+`cookies.txt` export). The web form exposes browser cookies as a select with
+`firefox` selected by default; API callers may still pass yt-dlp profile syntax.
+Use only one cookie source per job. If yt-dlp reports rotated or invalid YouTube
+account cookies, the job should fail with a recovery hint telling the user to
+refresh the browser login or export a fresh cookies file.
+
 ## Frame Selection
 
 Candidate frames come from three sources, merged and deduplicated:

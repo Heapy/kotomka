@@ -252,6 +252,7 @@ summary {
 
 .error-text {
   color: var(--danger);
+  white-space: pre-wrap;
 }
 
 .report {
@@ -266,6 +267,24 @@ summary {
 .report-band h2,
 .note-section h3 {
   margin: 0 0 12px;
+}
+
+.source-video-band {
+  display: grid;
+  gap: 12px;
+}
+
+.source-video {
+  display: block;
+  width: 100%;
+  max-width: 860px;
+  max-height: 70vh;
+  justify-self: center;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #101418;
+  object-fit: contain;
 }
 
 .summary {
@@ -478,7 +497,8 @@ summary {
 
 @media print {
   .topbar,
-  .primary-button {
+  .primary-button,
+  .source-video-band {
     display: none;
   }
 

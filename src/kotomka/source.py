@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -12,6 +13,21 @@ from .media import extract_audio, ffprobe_duration, require_binary, run_command
 from .models import Chapter, JobCreate, SourceArtifact, VideoMetadata
 
 MAX_DESCRIPTION_CHARS = 4000
+SUPPORTED_COOKIE_BROWSERS = {
+    "brave",
+    "chrome",
+    "chromium",
+    "edge",
+    "firefox",
+    "opera",
+    "safari",
+    "vivaldi",
+    "whale",
+}
+YOUTUBE_COOKIE_ERROR_MARKERS = (
+    "provided youtube account cookies are no longer valid",
+    "sign in to confirm you",
+)
 
 # audio.mp3 is the pre-FLAC artifact name; reprocessed jobs may still have one on disk.
 AUDIO_ARTIFACT_NAMES = {"audio.flac", "audio.mp3"}
@@ -32,21 +48,11 @@ class YtDlpSourceProvider(SourceProvider):
         media_dir = artifact_dir / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
         output_template = str(media_dir / "source.%(ext)s")
-        command = [
-            "yt-dlp",
-            "--no-playlist",
-            "--write-info-json",
-            "--merge-output-format",
-            "mp4",
-            "-f",
-            "bv*+ba/best",
-            "-o",
-            output_template,
-        ]
-        if payload.cookies_from_browser:
-            command.extend(["--cookies-from-browser", payload.cookies_from_browser])
-        command.append(payload.source_url)
-        run_command(command, timeout=60 * 60)
+        command = _yt_dlp_command(payload, output_template)
+        try:
+            run_command(command, timeout=60 * 60)
+        except RuntimeError as exc:
+            raise RuntimeError(_yt_dlp_error_message(str(exc), payload, command=command)) from exc
 
         info_path = media_dir / "source.info.json"
         video_path = _find_downloaded_video(media_dir)
@@ -55,6 +61,93 @@ class YtDlpSourceProvider(SourceProvider):
         metadata.duration_s = duration
         audio_path = extract_audio(video_path, media_dir / "audio.flac")
         return SourceArtifact(metadata=metadata, video_path=video_path, audio_path=audio_path, info_path=info_path)
+
+
+def _yt_dlp_command(payload: JobCreate, output_template: str) -> list[str]:
+    command = [
+        "yt-dlp",
+        "--no-playlist",
+        "--write-info-json",
+        "--merge-output-format",
+        "mp4",
+        "-f",
+        "bv*+ba/best",
+        "-o",
+        output_template,
+    ]
+    command.extend(_yt_dlp_cookie_args(payload))
+    command.append(payload.source_url)
+    return command
+
+
+def _yt_dlp_cookie_args(payload: JobCreate) -> list[str]:
+    if payload.cookies_from_browser and payload.cookies_file:
+        raise ValueError("Use either Cookies browser or Cookies file, not both")
+    if payload.cookies_from_browser:
+        browser_source = payload.cookies_from_browser.strip()
+        browser_name = _cookie_browser_name(browser_source)
+        if browser_name not in SUPPORTED_COOKIE_BROWSERS:
+            supported = ", ".join(sorted(SUPPORTED_COOKIE_BROWSERS))
+            raise ValueError(f"Unsupported cookies browser '{browser_name}'. Supported browsers: {supported}")
+        normalized_browser_source = f"{browser_name}{browser_source[len(browser_name):]}"
+        return ["--cookies-from-browser", normalized_browser_source]
+    if payload.cookies_file:
+        cookies_path = _cookies_file_path(payload.cookies_file)
+        if not cookies_path.exists():
+            raise FileNotFoundError(f"Cookies file not found: {cookies_path}")
+        if not cookies_path.is_file():
+            raise ValueError(f"Cookies file is not a file: {cookies_path}")
+        return ["--cookies", str(cookies_path)]
+    return []
+
+
+def _cookie_browser_name(browser_source: str) -> str:
+    return re.split(r"[+:]", browser_source.strip(), maxsplit=1)[0].lower()
+
+
+def _cookies_file_path(value: str) -> Path:
+    text = value.strip()
+    parsed = urlparse(text)
+    if parsed.scheme == "file":
+        path = Path(unquote(parsed.path)).expanduser()
+    else:
+        path = Path(text).expanduser()
+    return path if path.is_absolute() else path.resolve()
+
+
+def _yt_dlp_error_message(error: str, payload: JobCreate, *, command: list[str] | None = None) -> str:
+    detail = _command_error_detail(error)
+    lowered = detail.lower()
+    command_block = f"\n\nyt-dlp command:\n{shlex.join(command)}" if command else ""
+    if any(marker in lowered for marker in YOUTUBE_COOKIE_ERROR_MARKERS):
+        hints = [
+            "YouTube rejected the current cookies or requires an authenticated browser session.",
+            "Open the selected browser, sign in to YouTube again, then retry the job.",
+            "If browser extraction keeps failing, export a fresh Netscape cookies.txt file and set Cookies file instead of Cookies browser.",
+        ]
+        if payload.cookies_from_browser:
+            hints.append(f"Browser cookie source used: {payload.cookies_from_browser}.")
+        if payload.cookies_file:
+            hints.append("Cookies file was supplied; export it again because YouTube cookies may have rotated.")
+        if not payload.cookies_from_browser and not payload.cookies_file:
+            hints.append("This video appears to require YouTube cookies.")
+        return "yt-dlp could not download this YouTube video.\n" + "\n".join(f"- {hint}" for hint in hints) + command_block + (
+            f"\n\nOriginal yt-dlp output:\n{_tail_text(detail)}" if detail else ""
+        )
+    return f"yt-dlp failed while downloading the video.{command_block}\n\nOriginal error:\n{error}"
+
+
+def _command_error_detail(error: str) -> str:
+    if error.startswith("Command failed:") and "\n" in error:
+        return error.split("\n", 1)[1].strip()
+    return error.strip()
+
+
+def _tail_text(value: str, *, limit: int = 4000) -> str:
+    text = value.strip()
+    if len(text) <= limit:
+        return text
+    return "..." + text[-limit:]
 
 
 class LocalFileSourceProvider(SourceProvider):
@@ -129,4 +222,3 @@ def _chapters_from_info(value: Any) -> list[Chapter]:
             continue
         chapters.append(Chapter(title=str(item.get("title") or "").strip(), start_s=max(0.0, start_s), end_s=end_s))
     return chapters
-

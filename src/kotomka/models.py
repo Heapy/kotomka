@@ -16,7 +16,16 @@ class JobCreate(BaseModel):
     stt_provider: str | None = None
     llm_provider: str | None = None
     cookies_from_browser: str | None = None
+    cookies_file: str | None = None
     speakers_expected: int | None = None
+
+    @field_validator("cookies_from_browser", "cookies_file")
+    @classmethod
+    def validate_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
 
     @field_validator("speakers_expected")
     @classmethod

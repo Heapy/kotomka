@@ -26,6 +26,15 @@
     </div>
   </header>
 
+  {% if source_video %}
+  <section class="report-band source-video-band">
+    <h2>Source Video</h2>
+    <video class="source-video" controls preload="metadata"{% if report.frames %} poster="{{ url_for('job_asset', job_id=job.id, asset_path='frames/' ~ report.frames[0].image_path) }}"{% endif %}>
+      <source src="{{ url_for('job_asset', job_id=job.id, asset_path=source_video.asset_path) }}" type="{{ source_video.content_type }}">
+    </video>
+  </section>
+  {% endif %}
+
   <section class="report-band">
     <h2>Summary</h2>
     <p class="summary">{{ citation_links(report.summary, report.video.webpage_url or report.video.source_url) }}</p>

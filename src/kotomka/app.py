@@ -17,12 +17,25 @@ from .pdf import render_pdf, should_regenerate_pdf
 from .providers.llm import available_llm_providers
 from .providers.stt import available_stt_providers
 from .reporting import CITATION_PATTERN, load_report
+from .source import SUPPORTED_COOKIE_BROWSERS
 from .storage import JobStore
 from .utils import format_timecode, read_json
 from .worker import JobWorker
 
 
 PACKAGE_DIR = Path(__file__).parent
+DEFAULT_COOKIE_BROWSER = "firefox"
+COOKIE_BROWSER_OPTIONS = [DEFAULT_COOKIE_BROWSER] + [
+    browser for browser in sorted(SUPPORTED_COOKIE_BROWSERS) if browser != DEFAULT_COOKIE_BROWSER
+]
+VIDEO_ASSET_TYPES = {
+    ".m4v": "video/mp4",
+    ".mov": "video/quicktime",
+    ".mp4": "video/mp4",
+    ".ogg": "video/ogg",
+    ".ogv": "video/ogg",
+    ".webm": "video/webm",
+}
 settings = get_settings()
 store = JobStore(settings.db_path, settings.jobs_dir)
 worker = JobWorker(store=store, settings=settings)
@@ -55,6 +68,8 @@ def index(request: Request) -> HTMLResponse:
             "llm_providers": available_llm_providers(),
             "default_stt": settings.stt_provider,
             "default_llm": settings.llm_provider,
+            "cookie_browsers": COOKIE_BROWSER_OPTIONS,
+            "default_cookie_browser": DEFAULT_COOKIE_BROWSER,
         },
     )
 
@@ -83,6 +98,7 @@ def create_job_form(
     stt_provider: str = Form(""),
     llm_provider: str = Form(""),
     cookies_from_browser: str = Form(""),
+    cookies_file: str = Form(""),
     speakers_expected: str = Form(""),
 ) -> RedirectResponse:
     payload = JobCreate(
@@ -91,6 +107,7 @@ def create_job_form(
         stt_provider=stt_provider or None,
         llm_provider=llm_provider or None,
         cookies_from_browser=cookies_from_browser or None,
+        cookies_file=cookies_file or None,
         speakers_expected=int(speakers_expected) if speakers_expected.strip() else None,
     )
     job = store.create_job(payload)
@@ -166,7 +183,11 @@ def job_report(request: Request, job_id: str) -> HTMLResponse:
     if job.status != "completed" or not report_path.exists():
         return templates.TemplateResponse(request, "status.html", {"job": job})
     report = load_report(report_path)
-    return templates.TemplateResponse(request, "report.html", {"job": job, "report": report})
+    return templates.TemplateResponse(
+        request,
+        "report.html",
+        {"job": job, "report": report, "source_video": _source_video_asset(job)},
+    )
 
 
 @app.get("/jobs/{job_id}/assets/{asset_path:path}", name="job_asset")
@@ -174,9 +195,13 @@ def job_asset(job_id: str, asset_path: str) -> FileResponse:
     job = _get_job_or_404(job_id)
     root = job.artifact_dir.resolve()
     target = (job.artifact_dir / asset_path).resolve()
-    if not str(target).startswith(str(root)) or not target.exists() or not target.is_file():
+    try:
+        target.relative_to(root)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Asset not found") from None
+    if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")
-    return FileResponse(target)
+    return FileResponse(target, media_type=VIDEO_ASSET_TYPES.get(target.suffix.lower()))
 
 
 @app.get("/jobs/{job_id}/pdf", name="job_pdf")
@@ -239,3 +264,51 @@ def _job_display_title(job) -> str:
         except Exception:
             pass
     return job.input.source_url
+
+
+def _source_video_asset(job) -> dict[str, str] | None:
+    root = job.artifact_dir.resolve()
+    source_path = job.artifact_dir / "source.json"
+    if source_path.exists():
+        try:
+            asset = _video_asset_from_path(read_json(source_path).get("video_path"), root)
+        except Exception:
+            asset = None
+        if asset is not None:
+            return asset
+
+    media_dir = job.artifact_dir / "media"
+    if not media_dir.is_dir():
+        return None
+    candidates = sorted(
+        (path for path in media_dir.glob("source.*") if path.is_file()),
+        key=lambda path: path.stat().st_size,
+        reverse=True,
+    )
+    for candidate in candidates:
+        asset = _video_asset_from_path(candidate, root)
+        if asset is not None:
+            return asset
+    return None
+
+
+def _video_asset_from_path(value: object, root: Path) -> dict[str, str] | None:
+    if not isinstance(value, (str, Path)):
+        return None
+    candidate = Path(value)
+    candidates = [candidate] if candidate.is_absolute() else [candidate, root / candidate]
+    target = None
+    content_type = None
+    for item in candidates:
+        resolved = item.resolve()
+        content_type = VIDEO_ASSET_TYPES.get(resolved.suffix.lower())
+        if content_type is not None and resolved.is_file():
+            target = resolved
+            break
+    if target is None or content_type is None:
+        return None
+    try:
+        asset_path = target.relative_to(root).as_posix()
+    except ValueError:
+        return None
+    return {"asset_path": asset_path, "content_type": content_type}

@@ -29,6 +29,21 @@ separate OAuth state under `data/codex_subscription_auth.json` by default and
 uses the ChatGPT Codex backend for Responses-style text/vision requests. It
 does not provide audio transcription; STT remains a separate pluggable provider.
 
+## YouTube Cookies
+
+Some YouTube videos fail before media processing with "Sign in to confirm you're
+not a bot." For those, set either:
+
+- `Cookies browser`: a yt-dlp browser source such as `firefox`, `chrome`, or
+  `safari`. The web form uses a browser select with `firefox` selected by
+  default; API callers may pass yt-dlp profile syntax such as
+  `chrome:Profile 1`.
+- `Cookies file`: a fresh Netscape-format `cookies.txt` export.
+
+Use only one of those fields per job. If yt-dlp says the YouTube account cookies
+are no longer valid, refresh the YouTube login in that browser or export a new
+cookies file, then retry the job.
+
 ## Pipeline
 
 1. `yt-dlp` downloads the video plus metadata (description, chapters, tags,
@@ -104,4 +119,3 @@ uv run pytest
 ```
 
 Integration tests use fake providers and do not call external APIs.
-
