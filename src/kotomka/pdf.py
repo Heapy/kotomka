@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -13,11 +14,19 @@ from .utils import format_timecode
 
 def render_pdf(request: Request, report: Report, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=output_path.parent, prefix=".report-", suffix=".pdf", delete=False) as handle:
+        temporary_path = Path(handle.name)
+    try:
+        _render_complete_pdf(request, report, temporary_path)
+        temporary_path.replace(output_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+    return output_path
+
+
+def _render_complete_pdf(request: Request, report: Report, output_path: Path) -> Path:
     if os.getenv("KOTOMKA_PDF_RENDERER", "reportlab").strip().lower() != "browser":
-        try:
-            _write_reportlab_pdf(report, output_path)
-        except Exception:
-            _write_minimal_pdf(report, output_path)
+        _write_reportlab_pdf(report, output_path)
         return output_path
 
     try:
@@ -45,10 +54,7 @@ def render_pdf(request: Request, report: Report, output_path: Path) -> Path:
         try:
             _render_with_chrome_cli(request, output_path)
         except Exception:
-            try:
-                _write_reportlab_pdf(report, output_path)
-            except Exception:
-                _write_minimal_pdf(report, output_path)
+            _write_reportlab_pdf(report, output_path)
         return output_path
 
 
@@ -197,7 +203,8 @@ def _write_reportlab_pdf(report: Report, output_path: Path) -> None:
             frame = frames_by_id.get(frame_id)
             if frame:
                 _append_frame(
-                    story, frame, output_path.parent, min(width, 150 * mm), PILImage, Image, Paragraph, Spacer, styles
+                    story, frame, output_path.parent, min(width, 150 * mm), PILImage, Image, Paragraph, Spacer, styles,
+                    max_height=doc.height - 12 - 40,
                 )
         story.append(Spacer(1, 4 * mm))
 
@@ -206,7 +213,8 @@ def _write_reportlab_pdf(report: Report, output_path: Path) -> None:
         story.append(Paragraph("Key Frames", styles["KotomkaH2"]))
         for frame in report.frames:
             _append_frame(
-                story, frame, output_path.parent, min(width, 150 * mm), PILImage, Image, Paragraph, Spacer, styles
+                story, frame, output_path.parent, min(width, 150 * mm), PILImage, Image, Paragraph, Spacer, styles,
+                max_height=doc.height - 12 - 40,
             )
 
     story.append(PageBreak())
@@ -236,45 +244,24 @@ def _register_reportlab_font(pdfmetrics, TTFont) -> str:
     return "Helvetica"
 
 
-def _append_frame(story, frame, job_dir: Path, target_width, PILImage, Image, Paragraph, Spacer, styles) -> None:
+def _append_frame(story, frame, job_dir: Path, target_width, PILImage, Image, Paragraph, Spacer, styles, *, max_height) -> None:
+    from reportlab.platypus import KeepTogether
+
     path = job_dir / "frames" / frame.image_path
     if not path.exists():
         return
     with PILImage.open(path) as image:
         image_width, image_height = image.size
-    target_height = target_width * image_height / max(1, image_width)
-    story.append(Image(str(path), width=target_width, height=target_height))
-    caption = f"{format_timecode(frame.timestamp_s)} · {frame.caption or frame.content_type}"
-    story.append(Paragraph(_p(caption), styles["KotomkaMeta"]))
-    story.append(Spacer(1, 12))
+    caption = Paragraph(_p(f"{format_timecode(frame.timestamp_s)} · {frame.caption or frame.content_type}"), styles["KotomkaMeta"])
+    caption_height = caption.wrap(target_width, max_height)[1]
+    image_height_limit = max(1, max_height - caption_height - 12)
+    scale = min(target_width / max(1, image_width), image_height_limit / max(1, image_height))
+    story.append(KeepTogether([
+        Image(str(path), width=image_width * scale, height=image_height * scale),
+        caption,
+        Spacer(1, 12),
+    ]))
 
 
 def _p(text: str) -> str:
     return escape(str(text)).replace("\n", "<br/>")
-
-
-def _write_minimal_pdf(report: Report, output_path: Path) -> None:
-    lines = [report.video.title, "", report.summary[:1200]]
-    text = "\n".join(lines).encode("latin-1", errors="replace").decode("latin-1")
-    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-    content = f"BT /F1 16 Tf 72 760 Td ({escaped}) Tj ET"
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        f"<< /Length {len(content.encode('latin-1'))} >>\nstream\n{content}\nendstream".encode("latin-1"),
-    ]
-    chunks = [b"%PDF-1.4\n"]
-    offsets = [0]
-    for index, obj in enumerate(objects, start=1):
-        offsets.append(sum(len(chunk) for chunk in chunks))
-        chunks.append(f"{index} 0 obj\n".encode("ascii") + obj + b"\nendobj\n")
-    xref_offset = sum(len(chunk) for chunk in chunks)
-    chunks.append(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
-    for offset in offsets[1:]:
-        chunks.append(f"{offset:010d} 00000 n \n".encode("ascii"))
-    chunks.append(
-        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
-    )
-    output_path.write_bytes(b"".join(chunks))

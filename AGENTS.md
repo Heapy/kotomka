@@ -167,6 +167,11 @@ default on) sends only the winners at high image detail to refresh captions and
 ReportLab is the default PDF renderer because launching system Chrome from Codex/macOS sandbox can crash Chrome.
 Set `KOTOMKA_PDF_RENDERER=browser` only when intentionally running outside the sandbox and accepting that risk.
 
+Frame images fit both the available width and page height, including portrait
+video. A PDF is published atomically only after full rendering succeeds; rendering
+errors preserve the previous cache and propagate instead of returning a truncated
+placeholder document.
+
 PDF cache is regenerated when missing, smaller than 4 KB, older than `report.json`, or requested with `?force=1`.
 
 ## Commands

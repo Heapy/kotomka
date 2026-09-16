@@ -1,7 +1,9 @@
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
+import kotomka.pdf as pdf_module
 from kotomka.models import (
     AssessmentFlag,
     FrameSelection,
@@ -15,10 +17,11 @@ from kotomka.models import (
 from kotomka.pdf import _write_reportlab_pdf
 
 
-def test_reportlab_pdf_contains_full_report_shape(tmp_path: Path) -> None:
+@pytest.mark.parametrize("image_size", [(320, 180), (1080, 1920), (800, 8000)])
+def test_reportlab_pdf_contains_full_report_shape(tmp_path: Path, image_size) -> None:
     frames_dir = tmp_path / "frames"
     frames_dir.mkdir()
-    Image.new("RGB", (320, 180), color=(255, 255, 255)).save(frames_dir / "frame.png")
+    Image.new("RGB", image_size, color=(255, 255, 255)).save(frames_dir / "frame.png")
     report = Report(
         video=VideoMetadata(source_url="https://example.com/video", title="Example Video", duration_s=120),
         summary="A useful summary.",
@@ -69,3 +72,23 @@ def test_reportlab_pdf_contains_full_report_shape(tmp_path: Path) -> None:
     _write_reportlab_pdf(report, output)
 
     assert output.stat().st_size > 4096
+
+
+def test_failed_pdf_export_preserves_previous_complete_file(tmp_path: Path, monkeypatch) -> None:
+    output = tmp_path / "report.pdf"
+    output.write_bytes(b"previous complete PDF")
+    report = Report(
+        video=VideoMetadata(source_url="https://example.com/video"),
+        summary="Summary", sections=[], frames=[], transcript=Transcript(),
+    )
+
+    def broken_renderer(report, destination):
+        destination.write_bytes(b"partial PDF")
+        raise RuntimeError("render failed")
+
+    monkeypatch.setenv("KOTOMKA_PDF_RENDERER", "reportlab")
+    monkeypatch.setattr(pdf_module, "_write_reportlab_pdf", broken_renderer)
+    with pytest.raises(RuntimeError, match="render failed"):
+        pdf_module.render_pdf(None, report, output)
+    assert output.read_bytes() == b"previous complete PDF"
+    assert list(tmp_path.iterdir()) == [output]
