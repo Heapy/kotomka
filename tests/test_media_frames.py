@@ -8,7 +8,7 @@ import pytest
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from kotomka.media import (
-    _extract_scene_frames,
+    _extract_frames_at,
     extract_frame_at,
     blur_score,
     compute_gap_fill_timestamps,
@@ -23,16 +23,73 @@ needs_ffmpeg = pytest.mark.skipif(
 )
 
 
-def test_scene_extraction_does_not_invent_timestamps_for_old_files(tmp_path, monkeypatch):
-    (tmp_path / "scene_00001.png").write_bytes(b"old")
+def test_batch_extraction_does_not_return_old_files_without_timestamps(tmp_path, monkeypatch):
+    (tmp_path / "candidate_00001.png").write_bytes(b"old")
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", ""))
-    assert _extract_scene_frames(Path("video.mp4"), tmp_path) == []
+    pending = CandidateFrame(frame_id="f1", timestamp_s=1, path=tmp_path / "pending.png")
+    assert _extract_frames_at(Path("video.mp4"), tmp_path, [pending]) == []
 
 
 def test_empty_seek_does_not_return_a_previous_frame(tmp_path, monkeypatch):
     (tmp_path / "frame.png").write_bytes(b"old")
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", ""))
     assert extract_frame_at(Path("video.mp4"), tmp_path, 1000, "frame.png") is None
+
+
+@needs_ffmpeg
+def test_extraction_uses_two_passes_without_thumbnail_files(tmp_path, monkeypatch):
+    video = tmp_path / "motion.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "testsrc=size=160x120:rate=4:duration=8", "-pix_fmt", "yuv420p", str(video)], check=True)
+    popen = subprocess.Popen
+    commands = []
+    def tracked(command, *args, **kwargs):
+        commands.append(command)
+        return popen(command, *args, **kwargs)
+    monkeypatch.setattr(subprocess, "Popen", tracked)
+    frames_dir = tmp_path / "frames"
+    result = extract_candidate_frames(video, frames_dir, duration_s=8, max_gap_seconds=2, interval_seconds=1, max_candidates=3)
+    assert result
+    assert len(commands) == 2
+    assert any("split" in argument for argument in commands[0])
+    assert not list(frames_dir.rglob("thumb*"))
+    assert len(list(frames_dir.glob("*.png"))) <= 3
+
+
+@needs_ffmpeg
+def test_batch_extraction_maps_close_targets_to_actual_vfr_timestamps(tmp_path):
+    from kotomka.media import _analyze_video
+    for index, color in enumerate(["white", "black", "white"]):
+        Image.new("RGB", (160, 120), color).save(tmp_path / f"vfr-{index}.png")
+    manifest = tmp_path / "vfr.txt"
+    manifest.write_text("file 'vfr-0.png'\nduration 0.2\nfile 'vfr-1.png'\nduration 0.7\nfile 'vfr-2.png'\nduration 0.1\nfile 'vfr-2.png'\n")
+    video = tmp_path / "vfr.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest),
+                    "-fps_mode", "vfr", "-pix_fmt", "yuv420p", str(video)], check=True)
+    _, scenes = _analyze_video(video, min_dwell_s=3, max_distance=3)
+    assert scenes[0] == pytest.approx(0.2, abs=0.03)
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    candidates = [CandidateFrame(frame_id=str(index), timestamp_s=ts, path=frames_dir / "pending.png",
+                                 source="plateau" if index == 1 else "periodic")
+                  for index, ts in enumerate([0.1, 0.15, 0.25])]
+    frames = _extract_frames_at(video, frames_dir, candidates)
+    assert [frame.frame_id for frame in frames] == ["1", "2"]
+    assert frames[0].timestamp_s == pytest.approx(0.2, abs=0.03)
+    assert frames[1].timestamp_s == pytest.approx(0.9, abs=0.03)
+    with Image.open(frames[0].path) as first, Image.open(frames[1].path) as second:
+        assert max(first.getpixel((0, 0))) < 10
+        assert second.getpixel((0, 0))[2] > 200
+
+
+@needs_ffmpeg
+def test_blur_fallback_can_share_a_timestamp_with_a_rejected_plateau(tmp_path):
+    video = tmp_path / "static.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "color=white:size=160x120:rate=2:duration=4", str(video)], check=True)
+    frames = extract_candidate_frames(video, tmp_path / "frames", duration_s=4, blur_threshold=10000)
+    assert len(frames) == 1
+    assert frames[0].source == "periodic"
 
 
 def test_detect_plateaus_finds_stable_runs() -> None:

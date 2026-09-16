@@ -100,6 +100,8 @@ class JobWorker:
                 plateau_min_dwell_s=self.settings.frame_plateau_min_dwell_seconds,
                 plateau_hash_distance=self.settings.frame_plateau_hash_distance,
                 blur_threshold=self.settings.frame_blur_threshold,
+                max_candidates=self.settings.max_candidate_frames,
+                chapters=source.metadata.chapters,
             )
             if frames and self.settings.frame_ocr_enabled and ocr_available():
                 self.store.update_job(job_id, progress=55, message="Reading slide text")

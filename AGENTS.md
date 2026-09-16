@@ -163,6 +163,14 @@ refresh the browser login or export a fresh cookies file.
 
 Candidate frames come from three sources, merged and deduplicated:
 
+One ffmpeg analysis pass splits the decoded video into scene detection and a
+stream of 1 fps grayscale thumbnails. Thumbnails are hashed in memory and never
+written as PNGs. Candidate timestamps are budgeted before a second sequential
+ffmpeg pass extracts full-resolution images; no per-candidate seeks are needed.
+Several targets mapping to one VFR frame share that image and use its actual PTS.
+An enabled blur gate can reserve one extra emergency image, used only if all
+normal picks fail the gate; the scoring budget remains unchanged.
+
 1. Plateau detection (slide-aware): grayscale thumbnails are sampled at 1 fps and
    hashed; stable runs of at least `KOTOMKA_FRAME_PLATEAU_MIN_DWELL_SECONDS` (hash
    distance ≤ `KOTOMKA_FRAME_PLATEAU_HASH_DISTANCE`) yield one full-resolution frame
@@ -200,7 +208,8 @@ explicitly truncated rather than excluding later frames. Frame labels carry dwel
 time and OCR text as scoring evidence.
 
 - `KOTOMKA_MAX_FRAMES_FOR_LLM`: batch size for one scoring request.
-- `KOTOMKA_MAX_CANDIDATE_FRAMES`: total candidate budget before scoring (default 150).
+- `KOTOMKA_MAX_CANDIDATE_FRAMES`: candidate budget before full-resolution extraction
+  and again after OCR, before scoring (default 150).
   Chapter representatives are reserved, then time buckets prefer plateau over scene
   over periodic candidates, with longer dwell winning within a source. If chapter
   count exceeds the budget, chapter picks are also spread across time.
