@@ -92,6 +92,27 @@ def test_blur_fallback_can_share_a_timestamp_with_a_rejected_plateau(tmp_path):
     assert frames[0].source == "periodic"
 
 
+@needs_ffmpeg
+def test_plateau_detection_preserves_a_changed_digit_before_deduplication(tmp_path):
+    font = ImageFont.load_default(size=28)
+    for index, number in enumerate([1, 9]):
+        slide = Image.new("RGB", (1280, 720), "white")
+        draw = ImageDraw.Draw(slide)
+        draw.rectangle((0, 0, 1280, 100), fill="#17385c")
+        draw.text((50, 30), "Database benchmark", font=font, fill="white")
+        draw.text((60, 220), f"Latency: {number} ms", font=font, fill="black")
+        slide.save(tmp_path / f"number-{index}.png")
+    manifest = tmp_path / "numbers.txt"
+    manifest.write_text("file 'number-0.png'\nduration 6\nfile 'number-1.png'\nduration 6\nfile 'number-1.png'\n")
+    video = tmp_path / "numbers.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(manifest),
+                    "-vf", "fps=25", "-c:v", "libx264", "-crf", "23", "-pix_fmt", "yuv420p", "-t", "12", str(video)], check=True)
+    frames = extract_candidate_frames(video, tmp_path / "frames", duration_s=12)
+    assert len(frames) == 2
+    assert frames[0].timestamp_s < 6 <= frames[1].timestamp_s
+    assert all(frame.source == "plateau" for frame in frames)
+
+
 def test_detect_plateaus_finds_stable_runs() -> None:
     hashes = [(float(ts), value) for ts, value in enumerate([0, 0, 0, 0, 50, 50, 50, 50, 99])]
     plateaus = detect_plateaus(hashes, max_distance=3, min_dwell_s=3.0)
@@ -102,6 +123,11 @@ def test_detect_plateaus_ignores_short_runs_and_noise() -> None:
     hashes = [(float(ts), value) for ts, value in enumerate([0, 50, 0, 50, 0, 50])]
     assert detect_plateaus(hashes, max_distance=3, min_dwell_s=3.0) == []
     assert detect_plateaus([(0.0, 1)], max_distance=3, min_dwell_s=1.0) == []
+
+
+def test_plateau_hashes_compare_to_run_anchor_not_only_previous_sample():
+    hashes = [(float(index), index) for index in range(9)]
+    assert detect_plateaus(hashes, max_distance=3, min_dwell_s=3) == [(2, 3), (6, 3)]
 
 
 def test_compute_gap_fill_timestamps_fills_only_large_gaps() -> None:

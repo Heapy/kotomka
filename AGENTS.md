@@ -172,8 +172,11 @@ An enabled blur gate can reserve one extra emergency image, used only if all
 normal picks fail the gate; the scoring budget remains unchanged.
 
 1. Plateau detection (slide-aware): grayscale thumbnails are sampled at 1 fps and
-   hashed; stable runs of at least `KOTOMKA_FRAME_PLATEAU_MIN_DWELL_SECONDS` (hash
-   distance ≤ `KOTOMKA_FRAME_PLATEAU_HASH_DISTANCE`) yield one full-resolution frame
+   streamed at up to 640 pixels per side; stable runs of at least
+   `KOTOMKA_FRAME_PLATEAU_MIN_DWELL_SECONDS` require both hash distance
+   ≤ `KOTOMKA_FRAME_PLATEAU_HASH_DISTANCE` and a maximum grayscale pixel difference
+   ≤ 12 from the run's anchor. This catches small text changes and accumulated
+   drift that perceptual hashes alone miss. Runs yield one full-resolution frame
    near the run's end, after slide builds/animations have finished. Dwell time is
    recorded on the candidate (`dwell_s`).
 2. ffmpeg scene detection (`select=gt(scene\,0.35),showinfo`) for camera cuts.

@@ -195,7 +195,7 @@ def _analyze_video(video_path: Path, *, min_dwell_s: float, max_distance: int) -
     """One decoder feeds scene detection and a streaming 1 fps grayscale sampler."""
     import imagehash
 
-    side = 160
+    side = 640
     graph = (
         "[0:v:0]setpts=PTS-STARTPTS,split=2[thumb][scene];"
         f"[thumb]fps=1,scale={side}:{side}:force_original_aspect_ratio=decrease,"
@@ -203,6 +203,9 @@ def _analyze_video(video_path: Path, *, min_dwell_s: float, max_distance: int) -
         "[scene]select='gt(scene,0.35)',showinfo,nullsink"
     )
     hashes: list[tuple[float, object]] = []
+    changes: set[int] = set()
+    anchor: Image.Image | None = None
+    anchor_hash = None
     with TemporaryFile() as log:
         command = [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-nostats", "-loglevel", "info", "-i", str(video_path),
@@ -216,7 +219,12 @@ def _analyze_video(video_path: Path, *, min_dwell_s: float, max_distance: int) -
                     if len(pixels) != side * side:
                         raise RuntimeError("ffmpeg returned an incomplete thumbnail")
                     image = Image.frombytes("L", (side, side), pixels)
-                    hashes.append((float(len(hashes)), imagehash.phash(image)))
+                    fingerprint = imagehash.phash(image)
+                    if (anchor is None or abs(fingerprint - anchor_hash) > max_distance
+                            or ImageChops.difference(image, anchor).getextrema()[1] > 12):
+                        changes.add(len(hashes))
+                        anchor, anchor_hash = image, fingerprint
+                    hashes.append((float(len(hashes)), fingerprint))
                 code = process.wait()
             except BaseException:
                 process.kill()
@@ -225,7 +233,8 @@ def _analyze_video(video_path: Path, *, min_dwell_s: float, max_distance: int) -
         output = log.read().decode("utf-8", errors="replace")
         if code:
             raise RuntimeError(f"Video analysis failed: {output[-4000:]}")
-    return detect_plateaus(hashes, max_distance=max_distance, min_dwell_s=min_dwell_s), parse_showinfo_timestamps(output)
+    return detect_plateaus(hashes, max_distance=max_distance, min_dwell_s=min_dwell_s,
+                           change_indices=changes), parse_showinfo_timestamps(output)
 
 
 def _extract_frames_at(video_path: Path, frames_dir: Path, candidates: list[CandidateFrame]) -> list[CandidateFrame]:
@@ -314,6 +323,7 @@ def detect_plateaus(
     *,
     max_distance: int,
     min_dwell_s: float,
+    change_indices: set[int] | None = None,
 ) -> list[tuple[float, float]]:
     """Find stable runs in a sampled hash sequence.
 
@@ -325,7 +335,8 @@ def detect_plateaus(
     plateaus: list[tuple[float, float]] = []
     run_start = 0
     for index in range(1, len(hashes) + 1):
-        if index < len(hashes) and abs(hashes[index][1] - hashes[index - 1][1]) <= max_distance:  # type: ignore[operator]
+        if (index < len(hashes) and index not in (change_indices or ())
+                and abs(hashes[index][1] - hashes[run_start][1]) <= max_distance):  # type: ignore[operator]
             continue
         last = index - 1
         dwell = hashes[last][0] - hashes[run_start][0]
