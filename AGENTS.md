@@ -109,6 +109,8 @@ STT providers:
   model weights, `KOTOMKA_WHISPER_MODEL`, default `large-v3`). No diarization:
   all segments are `Speaker 1`. Useful as an A/B baseline for languages outside
   AssemblyAI's best-model coverage (e.g. Russian).
+  One model configuration is cached per process across jobs; local inference is
+  serialized through completion of the lazy segment iterator to bound resource use.
 
 LLM providers:
 

@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from importlib import util
 from pathlib import Path
+from threading import Lock
 
 from ...config import get_settings
 from ...models import Transcript, TranscriptSegment, TranscriptWord, VideoMetadata
 from ...utils import write_json
 from .base import SttProvider
+
+_MODEL_LOCK = Lock()
+
+
+@lru_cache(maxsize=1)
+def _load_model(model_name: str, compute_type: str):
+    from faster_whisper import WhisperModel
+
+    return WhisperModel(model_name, compute_type=compute_type)
 
 
 def whisper_available() -> bool:
@@ -18,8 +29,8 @@ class WhisperLocalSttProvider(SttProvider):
     """Offline transcription via faster-whisper.
 
     No diarization: every segment is labeled "Speaker 1". The model is
-    constructed lazily inside transcribe() because the first call downloads
-    multi-gigabyte weights.
+    loaded lazily and shared across jobs. Loading and inference are serialized
+    to bound memory use, including consumption of the lazy segment iterator.
     """
 
     name = "whisper"
@@ -38,21 +49,20 @@ class WhisperLocalSttProvider(SttProvider):
         raw_path: Path | None = None,
     ) -> Transcript:
         del speakers_expected  # no diarization support
-        from faster_whisper import WhisperModel
-
-        model = WhisperModel(self.model_name, compute_type=self.compute_type)
         language = (metadata.language or "").strip().split("-")[0].lower() or None
-        segments_iter, info = model.transcribe(
-            str(audio_path),
-            language=language,
-            word_timestamps=True,
-            vad_filter=True,
-        )
-        transcript = whisper_segments_to_transcript(
-            segments_iter,
-            language=getattr(info, "language", None) or language or "unknown",
-            fallback_duration=metadata.duration_s,
-        )
+        with _MODEL_LOCK:
+            model = _load_model(self.model_name, self.compute_type)
+            segments_iter, info = model.transcribe(
+                str(audio_path),
+                language=language,
+                word_timestamps=True,
+                vad_filter=True,
+            )
+            transcript = whisper_segments_to_transcript(
+                segments_iter,
+                language=getattr(info, "language", None) or language or "unknown",
+                fallback_duration=metadata.duration_s,
+            )
         if raw_path is not None:
             write_json(
                 raw_path,
