@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from importlib import util
 from pathlib import Path
 
+from PIL import Image, ImageChops
+
 from .models import CandidateFrame
 
-_TOKEN = re.compile(r"[\w'-]+")
+_TOKEN = re.compile(r"[+-]?\d+(?:[.,]\d+)*%?|[\w'-]+|[<>=]+")
 
 
 def ocr_available() -> bool:
@@ -34,11 +37,9 @@ def annotate_frames_with_ocr(frames: list[CandidateFrame]) -> list[CandidateFram
 def dedupe_ocr_supersets(frames: list[CandidateFrame], *, window_s: float = 90.0) -> list[CandidateFrame]:
     """Drop bullet-build predecessors among chronologically ordered frames.
 
-    A frame whose OCR tokens are (almost) contained in a later frame within
-    `window_s` is an incomplete version of the same slide mid-build; the later,
-    complete slide is kept. The comparison stays time-windowed because builds are
-    temporally adjacent, while far-apart slides sharing template text (footers,
-    logos) must not match.
+    Require an exact text superset and unchanged existing foreground on a flat
+    slide background. Uncertain matches, OCR omissions, charts and changed metrics
+    survive for scoring rather than being mistaken for incremental bullet builds.
     """
     tokens = [_token_set(frame.ocr_text) for frame in frames]
     kept: list[CandidateFrame] = []
@@ -52,7 +53,7 @@ def dedupe_ocr_supersets(frames: list[CandidateFrame], *, window_s: float = 90.0
                 later_tokens = tokens[later]
                 if len(later_tokens) <= len(current):
                     continue
-                if len(current - later_tokens) <= len(current) // 10:
+                if current <= later_tokens and _only_adds_content(frame.path, frames[later].path):
                     superseded = True
                     break
         if not superseded:
@@ -60,7 +61,29 @@ def dedupe_ocr_supersets(frames: list[CandidateFrame], *, window_s: float = 90.0
     return kept
 
 
-def _token_set(text: str | None) -> frozenset[str]:
-    if not text:
-        return frozenset()
-    return frozenset(token for token in _TOKEN.findall(text.lower()) if len(token) > 1)
+def _token_set(text: str | None) -> Counter[str]:
+    return Counter(_TOKEN.findall((text or "").casefold()))
+
+
+def _only_adds_content(first: Path, second: Path) -> bool:
+    try:
+        with Image.open(first) as image:
+            before = image.convert("RGB")
+        with Image.open(second) as image:
+            after = image.convert("RGB")
+        if before.size != after.size:
+            return False
+        w, h = before.size
+        corners = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        background = before.getpixel(corners[0])
+        if any(max(abs(a - b) for a, b in zip(image.getpixel(point), background)) > 8
+               for image in (before, after) for point in corners):
+            return False
+        delta = ImageChops.difference(before, Image.new("RGB", before.size, background))
+        red, green, blue = delta.split()
+        foreground = ImageChops.lighter(ImageChops.lighter(red, green), blue).point(lambda value: 255 if value > 16 else 0)
+        changes = ImageChops.difference(before, after)
+        changes = Image.composite(changes, Image.new("RGB", before.size), foreground)
+        return max(high for _, high in changes.getextrema()) <= 8
+    except (OSError, ValueError):
+        return False

@@ -177,7 +177,10 @@ video compression, before OCR and scoring inspect the surviving frames.
 When the `ocr` extra is installed (ocrmac, macOS Apple Vision) and
 `KOTOMKA_FRAME_OCR_ENABLED` is on (default), candidates are OCR-annotated after
 extraction: bullet-build predecessors whose text is contained in a time-adjacent
-later slide are dropped (`src/kotomka/ocr.py`), and the recognized text is passed
+later slide are dropped only when every OCR token (including numbers, negations,
+and repeated tokens) survives and the existing visual foreground is unchanged
+on a flat background (`src/kotomka/ocr.py`). Charts or uncertain builds are kept.
+The recognized text is passed
 to the frame-scoring prompt and into `FrameSelection.ocr_text` for the report.
 Without ocrmac the step is a silent no-op.
 

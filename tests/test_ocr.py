@@ -10,7 +10,9 @@ from kotomka.ocr import dedupe_ocr_supersets, ocr_available, ocr_image
 
 def frame(frame_id: str, timestamp_s: float, ocr_text: str | None, tmp_path: Path) -> CandidateFrame:
     path = tmp_path / f"{frame_id}.png"
-    path.write_bytes(b"png")
+    image = Image.new("RGB", (640, 360), "white")
+    ImageDraw.Draw(image).text((20, 20), ocr_text or "", fill="black")
+    image.save(path)
     return CandidateFrame(frame_id=frame_id, timestamp_s=timestamp_s, path=path, ocr_text=ocr_text)
 
 
@@ -41,6 +43,24 @@ def test_dedupe_ocr_supersets_keeps_frames_without_text(tmp_path: Path) -> None:
     ]
     kept = dedupe_ocr_supersets(frames, window_s=90.0)
     assert [item.frame_id for item in kept] == ["f1", "f2", "f3"]
+
+
+@pytest.mark.parametrize("old,new", [("10", "20"), ("1", "9"), ("1.5", "1.6"), ("not safe", "safe")])
+def test_dedupe_preserves_changed_numbers_and_negations(tmp_path, old, new):
+    prefix = "Benchmark latency {} ms measured for production database under normal steady traffic load"
+    frames = [frame("before", 10, prefix.format(old), tmp_path),
+              frame("after", 20, prefix.format(new) + " with retries enabled", tmp_path)]
+    assert dedupe_ocr_supersets(frames) == frames
+
+
+def test_text_superset_does_not_discard_changed_chart(tmp_path):
+    frames = [frame("before", 10, "Results latency milliseconds", tmp_path),
+              frame("after", 20, "Results latency milliseconds\nWith retries enabled", tmp_path)]
+    for item, color in zip(frames, ("red", "blue")):
+        with Image.open(item.path) as image:
+            ImageDraw.Draw(image).rectangle((50, 100, 300, 200), fill=color)
+            image.save(item.path)
+    assert dedupe_ocr_supersets(frames) == frames
 
 
 def test_worker_skips_ocr_when_unavailable(monkeypatch, tmp_path: Path) -> None:
