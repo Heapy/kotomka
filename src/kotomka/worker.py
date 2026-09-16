@@ -5,6 +5,7 @@ from queue import Empty, Queue
 from threading import Event, Semaphore, Thread
 
 from .config import Settings
+from .frame_selection import sample_timeline
 from .media import extract_audio, extract_candidate_frames, limit_candidates
 from .models import CandidateFrame, Chapter, FrameSelection, Transcript
 from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
@@ -280,10 +281,4 @@ def _fallback_frame_selection(frames: list[CandidateFrame], *, max_selected: int
 
 
 def _pick_evenly_spaced_frames(frames: list[CandidateFrame], *, max_selected: int) -> list[CandidateFrame]:
-    if len(frames) <= max_selected:
-        return frames
-    if max_selected <= 1:
-        return [frames[0]]
-    last_index = len(frames) - 1
-    indexes = {round(index * last_index / (max_selected - 1)) for index in range(max_selected)}
-    return [frames[index] for index in sorted(indexes)]
+    return sample_timeline(frames, max_selected)

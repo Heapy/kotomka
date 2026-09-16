@@ -3,7 +3,7 @@ from threading import Barrier
 
 from kotomka.models import CandidateFrame, Chapter, FrameSelection, Transcript
 from kotomka.providers.llm.base import LlmProvider
-from kotomka.worker import _fallback_frame_selection, _score_frames_across_timeline, _select_diverse_frames
+from kotomka.worker import _fallback_frame_selection, _pick_evenly_spaced_frames, _score_frames_across_timeline, _select_diverse_frames
 from kotomka.media import limit_candidates
 
 
@@ -117,6 +117,16 @@ def test_fallback_selection_spans_timeline(tmp_path: Path) -> None:
     selected = _fallback_frame_selection(_frames(tmp_path, count=10), max_selected=3)
 
     assert [frame.frame_id for frame in selected] == ["f-00", "f-04", "f-09"]
+
+
+def test_fallback_covers_sparse_late_video_instead_of_dense_early_indexes(tmp_path):
+    timestamps = [*range(100), 600, 1200, 1800]
+    frames = [CandidateFrame(frame_id=str(index), timestamp_s=ts, path=tmp_path / f"{index}.png")
+              for index, ts in enumerate(timestamps)]
+    result = _fallback_frame_selection(frames, max_selected=6)
+    assert [frame.timestamp_s for frame in result] == [0, 49, 99, 600, 1200, 1800]
+    assert _pick_evenly_spaced_frames(frames, max_selected=0) == []
+    assert len(_pick_evenly_spaced_frames(frames, max_selected=1)) == 1
 
 
 def test_candidate_limit_preserves_time_coverage_and_caps_scoring_cost(tmp_path):

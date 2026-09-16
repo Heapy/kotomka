@@ -235,6 +235,8 @@ exists in that chapter (best-scored chapter picks are reserved first, then the
 usual greedy score/gap selection fills the rest). The final selected frames are
 returned in chronological order. If LLM scoring returns nothing, fallback
 selection samples frames evenly across the timeline.
+Fallback sampling uses actual timestamps: reserve the ends, then fill the largest
+uncovered time gaps. Dense early cuts cannot crowd out sparse late candidates.
 
 After selection, an optional re-caption pass (`KOTOMKA_RECAPTION_SELECTED_FRAMES`,
 default on) sends only the winners at high image detail to refresh captions and
