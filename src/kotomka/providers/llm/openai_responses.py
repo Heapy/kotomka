@@ -40,6 +40,7 @@ class OpenAiResponsesProvider(JsonLlmProviderBase):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
     ) -> dict[str, Any]:
+        self._last_web_search_used = False
         content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
         for image in images:
             content.append({"type": "input_text", "text": image.label})
@@ -58,5 +59,9 @@ class OpenAiResponsesProvider(JsonLlmProviderBase):
                 }
             },
             **extra,
+        )
+        self._last_web_search_used = any(
+            getattr(item, "type", None) == "web_search_call" and getattr(item, "status", None) == "completed"
+            for item in response.output
         )
         return parse_json_object(getattr(response, "output_text", "") or "")

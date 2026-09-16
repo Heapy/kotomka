@@ -44,7 +44,9 @@ Main flow:
    finished report: originality, freshness anchored to the upload date (with
    stale-claim flags), audience, actionability, insight density, and a verdict.
    `KOTOMKA_ASSESSMENT_WEB_SEARCH=1` adds the OpenAI web_search tool to this call;
-   the Codex transport has no tools support and silently ignores the flag.
+   the report is marked web-checked only when the response contains a completed
+   web search call, not merely when the tool was offered.
+   The Codex transport has no tools support and silently ignores the flag.
    Assessment failures never fail the job.
 9. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
 

@@ -201,6 +201,7 @@ class JsonLlmProviderBase(LlmProvider):
                 for section in report.sections
             ],
         }
+        self._last_web_search_used = False
         payload = self._request_json(
             instructions=ASSESSMENT_INSTRUCTIONS,
             text=json.dumps(context, ensure_ascii=False, default=str),
@@ -212,7 +213,7 @@ class JsonLlmProviderBase(LlmProvider):
         )
         assessment = coerce_assessment(payload)
         if assessment is not None:
-            assessment.web_search_used = web_search
+            assessment.web_search_used = web_search and self._last_web_search_used
         return assessment
 
     def _chunk_notes_text(

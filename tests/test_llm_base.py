@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -15,6 +17,7 @@ from kotomka.models import (
     VideoMetadata,
 )
 from kotomka.providers.llm.json_base import JsonLlmProviderBase, frame_selections_from_payload
+from kotomka.providers.llm.openai_responses import OpenAiResponsesProvider
 
 
 class StubJsonLlm(JsonLlmProviderBase):
@@ -364,7 +367,34 @@ def test_assess_report_web_search_needs_flag_and_tool_support(monkeypatch) -> No
     tooled = ToolStub([ASSESSMENT_PAYLOAD])
     assessment = tooled.assess_report(report=report, metadata=make_source().metadata, output_language="ru")
     assert tooled.calls[0]["tools"] == [{"type": "web_search"}]
-    assert assessment is not None and assessment.web_search_used is True
+    assert assessment is not None and assessment.web_search_used is False
+
+
+@pytest.mark.parametrize("output", [
+    [],
+    [SimpleNamespace(type="web_search_call", status="failed")],
+    [SimpleNamespace(type="message", status="completed")],
+])
+def test_assessment_records_completed_search_calls_and_resets_between_requests(monkeypatch, output) -> None:
+    monkeypatch.setattr(get_settings(), "assessment_web_search", True)
+    provider = OpenAiResponsesProvider.__new__(OpenAiResponsesProvider)
+    provider.model = "test-model"
+    create = Mock(side_effect=[
+        SimpleNamespace(
+            output=[SimpleNamespace(type="web_search_call", status="completed")],
+            output_text=json.dumps(ASSESSMENT_PAYLOAD),
+        ),
+        SimpleNamespace(output=output, output_text=json.dumps(ASSESSMENT_PAYLOAD)),
+    ])
+    provider.client = SimpleNamespace(responses=SimpleNamespace(create=create))
+    report = make_report()
+
+    searched = provider.assess_report(report=report, metadata=report.video, output_language="ru")
+    unsearched = provider.assess_report(report=report, metadata=report.video, output_language="ru")
+
+    assert searched is not None and searched.web_search_used is True
+    assert unsearched is not None and unsearched.web_search_used is False
+    assert all(call.kwargs["tools"] == [{"type": "web_search"}] for call in create.call_args_list)
 
 
 def make_selection_files(tmp_path: Path, count: int) -> list[FrameSelection]:
