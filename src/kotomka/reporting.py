@@ -28,26 +28,28 @@ def normalize_report(report: Report, *, tolerance_s: float = 5.0) -> Report:
     rewritten only when every value in the group is clearly a timestamp, so bracketed
     numbers that are part of regular text or code survive untouched.
     """
-    duration = report.transcript.duration_s or report.video.duration_s
-    starts = sorted({segment.start_s for segment in report.transcript.segments})
+    duration = report.video.duration_s or report.transcript.duration_s
+    starts = sorted({
+        segment.start_s for segment in report.transcript.segments
+        if 0 <= segment.start_s and (duration <= 0 or segment.start_s <= duration)
+    })
     known_frame_ids = {frame.frame_id for frame in report.frames}
-    can_snap = duration > 0 and bool(starts)
 
     def snap_value(value: float) -> float:
-        nearest = min(starts, key=lambda start: abs(start - value))
-        if abs(nearest - value) <= tolerance_s:
-            return nearest
+        nearest = min(starts, key=lambda start: abs(start - value), default=None)
+        if nearest is not None and abs(nearest - value) <= tolerance_s:
+            value = nearest
         return min(max(value, 0.0), duration)
 
     def normalize_text(text: str) -> str:
-        if not can_snap:
+        if duration <= 0:
             return text
         return _normalize_inline_citations(text, starts, tolerance_s, duration)
 
     sections: list[ReportSection] = []
     for section in report.sections:
         start_s, end_s = sorted((section.start_s, section.end_s))
-        if can_snap:
+        if duration > 0:
             start_s = min(max(start_s, 0.0), duration)
             end_s = min(max(end_s, 0.0), duration)
             citations = sorted({snap_value(value) for value in section.citations})
@@ -83,12 +85,12 @@ def _rewrite_citation_group(match: re.Match[str], starts: list[float], tolerance
     rewritten: list[float] = []
     for raw in match.group(1).split(","):
         value = float(raw.strip())
-        nearest = min(starts, key=lambda start: abs(start - value))
+        nearest = min(starts, key=lambda start: abs(start - value), default=None)
         if value > duration:
-            rewritten.append(nearest if abs(nearest - value) <= tolerance_s else duration)
-        elif abs(nearest - value) <= 1e-6:
+            rewritten.append(nearest if nearest is not None and abs(nearest - value) <= tolerance_s else duration)
+        elif nearest is not None and abs(nearest - value) <= 1e-6:
             rewritten.append(nearest)
-        elif abs(nearest - value) <= tolerance_s and value > tolerance_s:
+        elif nearest is not None and abs(nearest - value) <= tolerance_s and value > tolerance_s:
             # Snapping tiny values would rewrite prose like "array [1, 2]" into [0];
             # values at or below the tolerance are left for the human eye instead.
             rewritten.append(nearest)

@@ -118,3 +118,31 @@ def test_empty_transcript_passes_through_numbers() -> None:
     normalized = normalize_report(report, tolerance_s=5.0)
     assert normalized.sections[0].citations == [999.0]
     assert normalized.sections[0].body == "See [999]."
+
+
+def test_silent_video_tail_keeps_its_section_and_citations() -> None:
+    report = make_report(
+        summary="Silent demo [90].",
+        sections=[make_section(start_s=80, end_s=110, body="Demo [90].", citations=[90])],
+    )
+    report.video.duration_s = 120
+    report.transcript = Transcript(
+        duration_s=60, segments=[TranscriptSegment(start_s=0, end_s=60, text="Speech")],
+    )
+    result = normalize_report(report)
+    assert (result.sections[0].start_s, result.sections[0].end_s) == (80, 110)
+    assert result.sections[0].citations == [90]
+    assert result.summary == "Silent demo [90]."
+    assert result.sections[0].body == "Demo [90]."
+
+
+def test_video_bounds_win_over_stt_timestamps_beyond_the_media() -> None:
+    report = make_report(sections=[make_section(end_s=200, citations=[123], body="End [123].")])
+    report.video.duration_s = 120
+    report.transcript = Transcript(
+        duration_s=125, segments=[TranscriptSegment(start_s=121, end_s=125, text="Late STT estimate")],
+    )
+    result = normalize_report(report)
+    assert result.sections[0].end_s == 120
+    assert result.sections[0].citations == [120]
+    assert result.sections[0].body == "End [120]."

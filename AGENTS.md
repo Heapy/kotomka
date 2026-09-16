@@ -35,6 +35,8 @@ Main flow:
    fails before final synthesis instead of generating an ungrounded report.
 7. `normalize_report` deterministically snaps citation timestamps to transcript
    segments, clamps out-of-range values, and drops unknown frame references.
+   Video duration defines the bounds (transcript duration is only a fallback),
+   preserving silent visual content after the last speech segment.
 8. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the
    finished report: originality, freshness anchored to the upload date (with
    stale-claim flags), audience, actionability, insight density, and a verdict.
