@@ -149,6 +149,9 @@ An optional blur gate (`KOTOMKA_FRAME_BLUR_THRESHOLD`, 0 = disabled) drops
 transition-blurred plateau/scene candidates before LLM scoring. Perceptual-hash
 dedupe runs in source-priority order (plateau, then scene, then periodic), so the
 post-animation plateau frame wins over a mid-transition scene duplicate.
+Perceptual hashes only shortlist duplicates: deletion also requires pixelwise
+agreement (at most 8 levels per channel). Changed slide text, numbers, and builds
+are retained even when their hashes collide, so OCR and scoring can inspect them.
 
 When the `ocr` extra is installed (ocrmac, macOS Apple Vision) and
 `KOTOMKA_FRAME_OCR_ENABLED` is on (default), candidates are OCR-annotated after

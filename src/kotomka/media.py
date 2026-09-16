@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from PIL import Image, ImageFilter, ImageStat
+from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 from .models import CandidateFrame
 from .utils import parse_showinfo_timestamps
@@ -130,10 +130,26 @@ def dedupe_frames(frames: list[CandidateFrame], *, max_distance: int = 6) -> lis
                 fingerprint = imagehash.phash(image)
         except Exception:
             continue
-        duplicate = any(abs(fingerprint - prior_hash) <= max_distance for _, prior_hash in kept)
+        duplicate = any(
+            abs(fingerprint - prior_hash) <= max_distance and _same_visual_content(frame.path, prior.path)
+            for prior, prior_hash in kept
+        )
         if not duplicate:
             kept.append((frame, fingerprint))
     return [frame for frame, _ in kept]
+
+
+def _same_visual_content(first: Path, second: Path, *, max_pixel_delta: int = 8) -> bool:
+    # pHash can collide even when a number or bullet changes. Only codec-level
+    # pixel differences are safe to discard before OCR sees the frames.
+    try:
+        with Image.open(first) as left, Image.open(second) as right:
+            if left.size != right.size:
+                return False
+            difference = ImageChops.difference(left.convert("RGBA"), right.convert("RGBA"))
+            return all(maximum <= max_pixel_delta for _minimum, maximum in difference.getextrema())
+    except (OSError, ValueError):
+        return False
 
 
 def _extract_scene_frames(video_path: Path, frames_dir: Path) -> list[CandidateFrame]:
