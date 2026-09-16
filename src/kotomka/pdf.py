@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import hashlib
 import subprocess
 import tempfile
 from pathlib import Path
@@ -57,6 +58,11 @@ def _render_complete_pdf(request: Request, report: Report, output_path: Path) ->
         except Exception:
             _write_reportlab_pdf(report, output_path)
         return output_path
+
+
+def pdf_cache_path(report: Report, job_dir: Path) -> Path:
+    digest = hashlib.sha256(report.model_dump_json().encode("utf-8")).hexdigest()
+    return job_dir / f"report-{digest}.pdf"
 
 
 def should_regenerate_pdf(report_path: Path, pdf_path: Path) -> bool:

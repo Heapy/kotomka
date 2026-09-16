@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from .models import Report, ReportSection
 from .utils import read_json, write_json
@@ -24,7 +25,14 @@ def substitute_citations(text: str, replace: Callable[[re.Match[str]], str]) -> 
 
 
 def save_report(report: Report, path: Path) -> None:
-    write_json(path, report.model_dump())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=path.parent, prefix=".report-", suffix=".json", delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        write_json(temporary, report.model_dump())
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def load_report(path: Path) -> Report:

@@ -28,6 +28,33 @@ def test_jobs_index_renders() -> None:
     assert "Jobs" in response.text
 
 
+def test_pdf_render_crossing_report_replacement_cannot_poison_cache(tmp_path, monkeypatch):
+    test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = test_store.create_job(JobCreate(source_url="https://example.com/v"))
+    test_store.update_job(job.id, status="completed")
+    report = Report(video=VideoMetadata(source_url="https://example.com/v"), summary="version one",
+                    sections=[], frames=[], transcript=Transcript())
+    report_path = job.artifact_dir / "report.json"
+    save_report(report, report_path)
+    monkeypatch.setattr(app_module, "store", test_store)
+    rendered = []
+
+    def render(request, snapshot, output):
+        rendered.append(snapshot.summary)
+        if len(rendered) == 1:
+            save_report(report.model_copy(update={"summary": "version two"}), report_path)
+        output.write_bytes(snapshot.summary.encode() * 500)
+        return output
+
+    monkeypatch.setattr(app_module, "render_pdf", render)
+    client = TestClient(app_module.app)
+    first = client.get(f"/jobs/{job.id}/pdf")
+    second = client.get(f"/jobs/{job.id}/pdf")
+    assert first.status_code == second.status_code == 200
+    assert second.content.startswith(b"version two")
+    assert rendered == ["version one", "version two"]
+
+
 def test_job_title_reads_small_source_metadata_without_opening_the_report(tmp_path, monkeypatch) -> None:
     test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
     job = test_store.create_job(JobCreate(source_url="https://example.com/v"))

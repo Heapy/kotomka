@@ -13,7 +13,7 @@ from markupsafe import Markup, escape
 
 from .config import get_settings
 from .models import JobCreate
-from .pdf import render_pdf, should_regenerate_pdf
+from .pdf import pdf_cache_path, render_pdf, should_regenerate_pdf
 from .providers.llm import available_llm_providers
 from .providers.stt import available_stt_providers
 from .reporting import load_report, substitute_citations
@@ -218,10 +218,16 @@ def job_pdf(request: Request, job_id: str, force: bool = False) -> FileResponse:
     report_path = job.artifact_dir / "report.json"
     if not report_path.exists():
         raise HTTPException(status_code=404, detail="Report not found")
-    pdf_path = job.artifact_dir / "report.pdf"
-    if force or should_regenerate_pdf(report_path, pdf_path):
-        render_pdf(request, load_report(report_path), pdf_path)
-    return FileResponse(pdf_path, media_type="application/pdf", filename=f"{job.id}.pdf")
+    for _ in range(2):
+        report = load_report(report_path)
+        pdf_path = pdf_cache_path(report, job.artifact_dir)
+        if force or should_regenerate_pdf(report_path, pdf_path):
+            render_pdf(request, report, pdf_path)
+        if _get_job_or_404(job_id).status != "completed":
+            raise HTTPException(status_code=409, detail="Job is being reprocessed")
+        if pdf_cache_path(load_report(report_path), job.artifact_dir) == pdf_path:
+            return FileResponse(pdf_path, media_type="application/pdf", filename=f"{job.id}.pdf")
+    raise HTTPException(status_code=409, detail="Report changed during PDF rendering; retry the download")
 
 
 def _get_job_or_404(job_id: str):

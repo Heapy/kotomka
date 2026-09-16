@@ -81,7 +81,7 @@ Generated data is intentionally local and ignored by git:
 - Downloaded media: `media/source.*`, `media/audio.flac`, `media/source.info.json`
   (jobs processed before the FLAC switch may still contain a legacy `media/audio.mp3`)
 - Frame candidates: `frames/*.png`
-- Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `notes.json` (map-reduce runs only), `report.json`, `report.pdf`
+- Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `notes.json` (map-reduce runs only), `report.json`, `report-<sha256>.pdf` (legacy `report.pdf` may still exist)
 
 After a report is saved and the job completes, unused PNG candidates are removed;
 every image referenced by `report.frames` is retained, including images not used
@@ -225,6 +225,10 @@ placeholder document.
 
 The ordinary PDF button uses the cache. PDF cache is regenerated when missing,
 smaller than 4 KB, older than `report.json`, or explicitly requested with `?force=1`.
+The cache filename includes the hash of the exact report snapshot being rendered;
+an older concurrent export cannot overwrite a newer generation's PDF. Publication
+rechecks the report and job state, retrying once if the report changed. Report JSON
+is also atomically replaced, so concurrent readers cannot see half-written JSON.
 
 ## Commands
 
