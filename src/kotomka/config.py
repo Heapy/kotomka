@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     frame_ocr_enabled: bool = True
     max_video_duration_seconds: int = 2 * 60 * 60
     max_frames_for_llm: int = 24
+    max_candidate_frames: int = Field(default=150, ge=1)
     max_selected_frames: int = 24
     selected_frame_min_gap_seconds: int = 20
     openai_model: str = "gpt-4.1"

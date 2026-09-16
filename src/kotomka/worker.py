@@ -5,7 +5,7 @@ from queue import Empty, Queue
 from threading import Event, Semaphore, Thread
 
 from .config import Settings
-from .media import extract_audio, extract_candidate_frames
+from .media import extract_audio, extract_candidate_frames, limit_candidates
 from .models import CandidateFrame, Chapter, FrameSelection, Transcript
 from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
 from .providers.llm.base import LlmProvider
@@ -104,6 +104,9 @@ class JobWorker:
             if frames and self.settings.frame_ocr_enabled and ocr_available():
                 self.store.update_job(job_id, progress=55, message="Reading slide text")
                 frames = dedupe_ocr_supersets(annotate_frames_with_ocr(frames))
+            frames = limit_candidates(
+                frames, limit=self.settings.max_candidate_frames, chapters=source.metadata.chapters,
+            )
             write_json(job.artifact_dir / "frames.json", [frame.model_dump() for frame in frames])
 
             self.store.update_job(job_id, progress=65, message="Scoring useful frames")

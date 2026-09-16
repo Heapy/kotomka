@@ -7,10 +7,52 @@ from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageChops, ImageFilter, ImageStat
 
-from .models import CandidateFrame
+from .models import CandidateFrame, Chapter
 from .utils import parse_showinfo_timestamps
 
 _SOURCE_PRIORITY = {"plateau": 0, "scene": 1, "periodic": 2}
+
+
+def limit_candidates(
+    frames: list[CandidateFrame], *, limit: int, chapters: list[Chapter] | None = None,
+) -> list[CandidateFrame]:
+    """Reserve chapter coverage, then divide the remaining budget across time."""
+    if limit <= 0:
+        return []
+    ordered = sorted(frames, key=lambda frame: (frame.timestamp_s, frame.frame_id))
+    if len(ordered) <= limit:
+        return ordered
+
+    def rank(frame: CandidateFrame, target: float = 0):
+        return (_SOURCE_PRIORITY.get(frame.source, 9), -(frame.dwell_s or 0),
+                abs(frame.timestamp_s - target), frame.timestamp_s, frame.frame_id)
+
+    picks: dict[str, CandidateFrame] = {}
+    for chapter in chapters or []:
+        candidates = [frame for frame in ordered if chapter.start_s <= frame.timestamp_s < chapter.end_s]
+        if candidates:
+            pick = min(candidates, key=lambda frame: rank(frame, (chapter.start_s + chapter.end_s) / 2))
+            picks[pick.frame_id] = pick
+    if len(picks) > limit:
+        return limit_candidates(list(picks.values()), limit=limit)
+    slots = limit - len(picks)
+    if slots:
+        start, end = ordered[0].timestamp_s, ordered[-1].timestamp_s
+        buckets: dict[int, list[CandidateFrame]] = {}
+        for frame in ordered:
+            if frame.frame_id in picks:
+                continue
+            bucket = min(slots - 1, int((frame.timestamp_s - start) * slots / (end - start))) if end > start else 0
+            buckets.setdefault(bucket, []).append(frame)
+        for bucket, candidates in buckets.items():
+            target = start + (bucket + 0.5) * (end - start) / slots
+            pick = min(candidates, key=lambda frame: rank(frame, target))
+            picks[pick.frame_id] = pick
+    for frame in sorted(ordered, key=rank):
+        if len(picks) >= limit:
+            break
+        picks.setdefault(frame.frame_id, frame)
+    return sorted(picks.values(), key=lambda frame: (frame.timestamp_s, frame.frame_id))
 
 
 def require_binary(name: str) -> str:

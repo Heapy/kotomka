@@ -200,6 +200,10 @@ explicitly truncated rather than excluding later frames. Frame labels carry dwel
 time and OCR text as scoring evidence.
 
 - `KOTOMKA_MAX_FRAMES_FOR_LLM`: batch size for one scoring request.
+- `KOTOMKA_MAX_CANDIDATE_FRAMES`: total candidate budget before scoring (default 150).
+  Chapter representatives are reserved, then time buckets prefer plateau over scene
+  over periodic candidates, with longer dwell winning within a source. If chapter
+  count exceeds the budget, chapter picks are also spread across time.
 - `KOTOMKA_MAX_SELECTED_FRAMES`: final selected frame limit.
 - `KOTOMKA_SELECTED_FRAME_MIN_GAP_SECONDS`: preferred time gap between selected frames.
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from kotomka.models import CandidateFrame, Chapter, FrameSelection, Transcript
 from kotomka.providers.llm.base import LlmProvider
 from kotomka.worker import _fallback_frame_selection, _score_frames_across_timeline, _select_diverse_frames
+from kotomka.media import limit_candidates
 
 
 class RecordingLlm(LlmProvider):
@@ -103,6 +104,35 @@ def test_fallback_selection_spans_timeline(tmp_path: Path) -> None:
     selected = _fallback_frame_selection(_frames(tmp_path, count=10), max_selected=3)
 
     assert [frame.frame_id for frame in selected] == ["f-00", "f-04", "f-09"]
+
+
+def test_candidate_limit_preserves_time_coverage_and_caps_scoring_cost(tmp_path):
+    frames = _frames(tmp_path, count=444)
+    limited = limit_candidates(frames, limit=150)
+    llm = RecordingLlm()
+    _score_frames_across_timeline(llm, limited, Transcript(), batch_size=24, max_selected=24, min_gap_seconds=0)
+    assert len(limited) == 150
+    assert len(llm.batches) == 7
+    assert len({int(frame.timestamp_s // 300) for frame in limited}) == 15
+
+
+def test_candidate_limit_prefers_stable_long_dwell_frames_within_time_buckets(tmp_path):
+    frames = _frames(tmp_path, count=30)
+    for index, dwell in [(2, 3), (3, 10), (14, 6), (27, 9)]:
+        frames[index].source = "plateau"
+        frames[index].dwell_s = dwell
+    frames[1].source = "scene"
+    limited = limit_candidates(frames, limit=3)
+    assert [frame.frame_id for frame in limited] == ["f-03", "f-14", "f-27"]
+
+
+def test_candidate_limit_reserves_short_chapters(tmp_path):
+    frames = _frames(tmp_path, count=30)
+    chapters = [Chapter(title="Short", start_s=10, end_s=11), Chapter(title="Rest", start_s=20, end_s=300)]
+    limited = limit_candidates(frames, limit=3, chapters=chapters)
+    assert len(limited) == 3
+    assert "f-01" in {frame.frame_id for frame in limited}
+    assert any(frame.timestamp_s >= 140 for frame in limited)
 
 
 def _frames(tmp_path: Path, *, count: int) -> list[CandidateFrame]:
