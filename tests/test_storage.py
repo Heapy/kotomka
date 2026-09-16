@@ -8,6 +8,36 @@ from kotomka.models import JobCreate
 from kotomka.storage import JobStore
 
 
+def test_update_can_clear_error_and_result_without_resetting_other_fields(tmp_path):
+    store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = store.create_job(JobCreate(source_url="https://example.com/video"))
+    store.update_job(job.id, status="failed", progress=42, error="old failure", result={"old": True})
+    store.update_job(job.id, message="new message")
+    assert store.get_job(job.id).error == "old failure"
+    cleared = store.update_job(job.id, error=None, result=None)
+    assert cleared.error is None and cleared.result is None
+    assert (cleared.status, cleared.progress, cleared.message) == ("failed", 42, "new message")
+    assert store.get_job(job.id) == cleared
+
+
+def test_update_uses_one_statement_and_returns_the_written_record(tmp_path, monkeypatch):
+    store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = store.create_job(JobCreate(source_url="https://example.com/video"))
+    statements = []
+    connect = store._connect
+    def traced_connect():
+        conn = connect()
+        conn.set_trace_callback(statements.append)
+        return conn
+    monkeypatch.setattr(store, "_connect", traced_connect)
+    result = store.update_job(job.id, progress=200)
+    assert result.progress == 100
+    data_statements = [statement for statement in statements if statement.lstrip().startswith(("UPDATE", "SELECT"))]
+    assert len(data_statements) == 1
+    with pytest.raises(KeyError):
+        store.update_job("does-not-exist", error=None)
+
+
 def test_delete_job_removes_terminal_record_and_artifacts(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
     job = store.create_job(JobCreate(source_url="https://example.com/video"))

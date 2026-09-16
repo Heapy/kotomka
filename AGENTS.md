@@ -104,6 +104,9 @@ Deletion is conditional on terminal status in the same SQL statement, so a
 concurrent retry cannot have its queued job or artifacts removed. Workers skip
 queue entries whose records no longer exist; unexpected job exceptions are
 logged without terminating the worker thread.
+Job updates write only supplied fields in one `UPDATE ... RETURNING` statement;
+omitted error/result values are preserved, while explicit `None` clears them.
+This avoids stale read/modify/write snapshots overwriting unrelated updates.
 
 Jobs also have an `is_read` state stored in SQLite. New and retried jobs are
 unread by default. `/jobs` hides read jobs unless `show_read=1` is present, and

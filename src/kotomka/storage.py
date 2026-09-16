@@ -14,6 +14,13 @@ from .models import JobCreate, JobRecord, JobStatus
 from .reporting import load_report
 
 
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
+
+
 class JobStore:
     def __init__(self, db_path: Path, jobs_dir: Path) -> None:
         self.db_path = db_path
@@ -114,35 +121,30 @@ class JobStore:
         status: JobStatus | None = None,
         progress: int | None = None,
         message: str | None = None,
-        error: str | None = None,
-        result: dict[str, Any] | None = None,
+        error: str | None | _Unset = _UNSET,
+        result: dict[str, Any] | None | _Unset = _UNSET,
     ) -> JobRecord:
-        current = self.get_job(job_id)
-        next_status = status or current.status
-        next_progress = current.progress if progress is None else max(0, min(100, int(progress)))
-        next_message = current.message if message is None else message
-        next_error = current.error if error is None else error
-        next_result = current.result if result is None else result
-        now = datetime.now(timezone.utc).isoformat()
+        changes: dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
+        if status is not None:
+            changes["status"] = status
+        if progress is not None:
+            changes["progress"] = max(0, min(100, int(progress)))
+        if message is not None:
+            changes["message"] = message
+        if error is not _UNSET:
+            changes["error"] = error
+        if result is not _UNSET:
+            changes["result_json"] = json.dumps(result, ensure_ascii=False, default=str) if result is not None else None
+        assignments = ", ".join(f"{column} = ?" for column in changes)
         with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE jobs
-                SET status = ?, progress = ?, message = ?, error = ?, updated_at = ?, result_json = ?
-                WHERE id = ?
-                """,
-                (
-                    next_status,
-                    next_progress,
-                    next_message,
-                    next_error,
-                    now,
-                    json.dumps(next_result, ensure_ascii=False, default=str) if next_result is not None else None,
-                    job_id,
-                ),
-            )
+            row = conn.execute(
+                f"UPDATE jobs SET {assignments} WHERE id = ? RETURNING *",
+                [*changes.values(), job_id],
+            ).fetchone()
             conn.commit()
-        return self.get_job(job_id)
+        if row is None:
+            raise KeyError(job_id)
+        return self._row_to_job(row)
 
     def retry_job(self, job_id: str, *, payload: JobCreate | None = None) -> JobRecord:
         current = self.get_job(job_id)
