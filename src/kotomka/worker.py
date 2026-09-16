@@ -173,7 +173,7 @@ class JobWorker:
             )
             try:
                 self.store.cleanup_frames(job_id)
-            except (OSError, ValueError):
+            except Exception:
                 # Cleanup is best-effort; a usable completed report stays usable.
                 traceback.print_exc()
         except Exception as exc:

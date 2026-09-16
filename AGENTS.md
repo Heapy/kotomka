@@ -92,6 +92,8 @@ candidates. Cleanup validates all retained images before deleting anything and
 holds a SQLite write transaction to exclude concurrent retries. Invalid/incomplete
 reports are skipped. Existing completed jobs can be cleaned with
 `uv run kotomka cleanup-frames` (`--dry-run` previews counts and bytes).
+Cleanup failures, including a busy database, are logged without changing job
+status after completion; they cannot fail a job concurrently queued for retry.
 
 Each extraction attempt uses a fresh temporary directory and publishes surviving
 frames with unique filename prefixes. Retries cannot reuse stale scene suffixes

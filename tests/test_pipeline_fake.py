@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import sqlite3
 import subprocess
 import time
 from pathlib import Path
@@ -108,6 +109,21 @@ def test_pipeline_completes_when_assessment_fails(tmp_path: Path, monkeypatch) -
     report = load_report(completed.artifact_dir / "report.json")
     assert report.assessment is None
     assert report.summary
+
+
+@needs_ffmpeg
+def test_cleanup_database_failure_cannot_fail_an_already_retried_job(tmp_path, monkeypatch):
+    video = make_fixture_video(tmp_path)
+    store, worker = make_worker(tmp_path)
+    job = store.create_job(JobCreate(source_url=video.as_uri(), stt_provider="fake", llm_provider="fake"))
+    def cleanup(job_id):
+        assert store.get_job(job_id).status == "completed"
+        store.retry_job(job_id)
+        raise sqlite3.OperationalError("database is locked")
+    monkeypatch.setattr(store, "cleanup_frames", cleanup)
+    worker.process(job.id)
+    assert store.get_job(job.id).status == "queued"
+    assert store.get_job(job.id).error is None
 
 
 class DelayedSourceProvider(LocalFileSourceProvider):
