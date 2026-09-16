@@ -30,8 +30,11 @@ OPTIONAL_REQUEST_KEYS = (
 class AssemblyAiSttProvider(SttProvider):
     name = "assemblyai"
 
-    def __init__(self, *, poll_seconds: float = 3.0) -> None:
+    def __init__(self, *, poll_seconds: float = 3.0, max_poll_seconds: float = 4 * 60 * 60) -> None:
+        if not 0 < max_poll_seconds < float("inf"):
+            raise ValueError("max_poll_seconds must be finite and positive")
         self.poll_seconds = poll_seconds
+        self.max_poll_seconds = max_poll_seconds
 
     def transcribe(
         self,
@@ -58,8 +61,15 @@ class AssemblyAiSttProvider(SttProvider):
                 keyterms=keyterms,
             )
             transcript_id = self._start_transcription(client, headers, request, audio_url)
+            deadline = time.monotonic() + self.max_poll_seconds
             while True:
-                poll_response = client.get(f"{TRANSCRIPT_URL}/{transcript_id}", headers=headers)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(f"AssemblyAI transcription timed out after {self.max_poll_seconds:g} seconds")
+                poll_response = client.get(
+                    f"{TRANSCRIPT_URL}/{transcript_id}", headers=headers,
+                    timeout=httpx.Timeout(min(60.0, remaining), read=min(120.0, remaining)),
+                )
                 poll_response.raise_for_status()
                 payload = poll_response.json()
                 status = payload.get("status")
@@ -69,7 +79,9 @@ class AssemblyAiSttProvider(SttProvider):
                     return assemblyai_payload_to_transcript(payload, fallback_duration=metadata.duration_s)
                 if status == "error":
                     raise RuntimeError(f"AssemblyAI transcription failed: {payload.get('error')}")
-                time.sleep(self.poll_seconds)
+                if status not in {"queued", "processing"}:
+                    raise RuntimeError(f"Unexpected AssemblyAI transcription status: {status!r}")
+                time.sleep(min(self.poll_seconds, max(0.0, deadline - time.monotonic())))
 
     def _start_transcription(
         self,

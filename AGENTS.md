@@ -96,6 +96,9 @@ STT providers:
   job provides it. A 400 naming an optional parameter triggers one retry with a
   minimal request body. The raw completed payload is saved to
   `transcript_raw.json`.
+  Polling has a total deadline (`KOTOMKA_ASSEMBLYAI_MAX_POLL_SECONDS`, default
+  14400 = 4 hours); unknown statuses fail immediately. Poll request timeouts and
+  sleep intervals are capped by the remaining budget.
 - `whisper`: offline faster-whisper transcription, available only when the
   `whisper` extra is installed (`uv sync --extra whisper`; first run downloads
   model weights, `KOTOMKA_WHISPER_MODEL`, default `large-v3`). No diarization:

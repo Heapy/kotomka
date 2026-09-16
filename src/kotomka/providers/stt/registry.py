@@ -20,7 +20,10 @@ def get_stt_provider(name: str | None = None) -> SttProvider:
     if provider_name == "fake":
         return FakeSttProvider()
     if provider_name == "assemblyai":
-        return AssemblyAiSttProvider(poll_seconds=settings.assemblyai_poll_seconds)
+        return AssemblyAiSttProvider(
+            poll_seconds=settings.assemblyai_poll_seconds,
+            max_poll_seconds=settings.assemblyai_max_poll_seconds,
+        )
     if provider_name == "whisper":
         if not whisper_available():
             raise ValueError(

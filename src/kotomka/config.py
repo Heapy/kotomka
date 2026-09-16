@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     )
     worker_pool_size: int = 3
     assemblyai_poll_seconds: float = 3.0
+    assemblyai_max_poll_seconds: float = Field(default=4 * 60 * 60, gt=0, allow_inf_nan=False)
     citation_snap_tolerance_seconds: float = 5.0
     stt_keyterms_max: int = 200
     whisper_model: str = "large-v3"
