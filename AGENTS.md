@@ -193,6 +193,10 @@ agreement (at most 8 levels per channel). Bounded codec ringing can pass a local
 1.5-pixel blur check; differences above 128 levels always survive. This preserves
 changed slide text, numbers, and builds while collapsing repeated slides after
 video compression, before OCR and scoring inspect the surviving frames.
+Full-resolution decoding is reused through a 64 MiB LRU cache per extraction.
+Compact 256-pixel previews of the locally blurred images reject most hash
+collisions before full-image comparison; previews alone never authorize deletion.
+The extraction candidate budget also bounds the number of pair comparisons.
 
 When the `ocr` extra is installed (ocrmac, macOS Apple Vision) and
 `KOTOMKA_FRAME_OCR_ENABLED` is on (default), candidates are OCR-annotated after

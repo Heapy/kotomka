@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+from collections import OrderedDict
 from pathlib import Path
 from tempfile import TemporaryDirectory, TemporaryFile
 
@@ -272,50 +273,81 @@ def _extract_frames_at(video_path: Path, frames_dir: Path, candidates: list[Cand
     return frames
 
 
-def dedupe_frames(frames: list[CandidateFrame], *, max_distance: int = 6) -> list[CandidateFrame]:
-    try:
-        import imagehash
-    except ImportError:
-        return frames
-    kept: list[tuple[CandidateFrame, object]] = []
+class _DecodedImageCache:
+    def __init__(self, budget_bytes: int) -> None:
+        self.budget = max(0, budget_bytes)
+        self.bytes = 0
+        self.images: OrderedDict[Path, Image.Image] = OrderedDict()
+
+    def get(self, path: Path) -> Image.Image:
+        if path in self.images:
+            self.images.move_to_end(path)
+            return self.images[path]
+        with Image.open(path) as image:
+            pixels = image.convert("RGBA")
+        self.put(path, pixels)
+        return pixels
+
+    def put(self, path: Path, pixels: Image.Image) -> None:
+        size = pixels.width * pixels.height * 4
+        if size > self.budget or path in self.images:
+            return
+        while self.images and self.bytes + size > self.budget:
+            _, old = self.images.popitem(last=False)
+            self.bytes -= old.width * old.height * 4
+        self.images[path] = pixels
+        self.bytes += size
+
+
+def dedupe_frames(
+    frames: list[CandidateFrame], *, max_distance: int = 6, decoded_cache_bytes: int = 64 * 1024 * 1024,
+) -> list[CandidateFrame]:
+    import imagehash
+
+    cache = _DecodedImageCache(decoded_cache_bytes)
+    kept: list[tuple[CandidateFrame, object, Image.Image, tuple[int, int]]] = []
     for frame in frames:
         try:
             with Image.open(frame.path) as image:
-                fingerprint = imagehash.phash(image)
-        except Exception:
+                pixels = image.convert("RGBA")
+            fingerprint = imagehash.phash(pixels)
+            blurred = pixels.filter(ImageFilter.GaussianBlur(1.5))
+            preview = blurred.copy()
+            preview.thumbnail((256, 256), Image.Resampling.BOX)
+        except (OSError, ValueError):
             continue
-        duplicate = any(
-            abs(fingerprint - prior_hash) <= max_distance and _same_visual_content(frame.path, prior.path)
-            for prior, prior_hash in kept
-        )
+        duplicate = False
+        for prior, prior_hash, prior_preview, size in kept:
+            if size != pixels.size or abs(fingerprint - prior_hash) > max_distance:
+                continue
+            # Positive-weight downsampling cannot amplify a <=8-level difference
+            # in the locally blurred images. This only rejects possible matches;
+            # every deletion still requires the full-resolution check below.
+            if max(high for _, high in ImageChops.difference(preview, prior_preview).getextrema()) > 8:
+                continue
+            try:
+                if _same_pixels(pixels, cache.get(prior.path), left_blurred=blurred):
+                    duplicate = True
+                    break
+            except (OSError, ValueError):
+                continue
         if not duplicate:
-            kept.append((frame, fingerprint))
-    return [frame for frame, _ in kept]
+            kept.append((frame, fingerprint, preview, pixels.size))
+            cache.put(frame.path, pixels)
+    return [frame for frame, _, _, _ in kept]
 
 
-def _same_visual_content(first: Path, second: Path, *, max_pixel_delta: int = 8) -> bool:
-    # pHash can collide even when a number or bullet changes. Only codec-level
-    # pixel differences are safe to discard before OCR sees the frames.
-    try:
-        with Image.open(first) as left, Image.open(second) as right:
-            if left.size != right.size:
-                return False
-            left_pixels, right_pixels = left.convert("RGBA"), right.convert("RGBA")
-            difference = ImageChops.difference(left_pixels, right_pixels)
-            peak_delta = max(maximum for _minimum, maximum in difference.getextrema())
-            if peak_delta <= max_pixel_delta:
-                return True
-            if peak_delta > 128:
-                return False
-            # Suppress codec ringing locally, without averaging away a changed
-            # glyph merely because it occupies a small fraction of the slide.
-            difference = ImageChops.difference(
-                left_pixels.filter(ImageFilter.GaussianBlur(1.5)),
-                right_pixels.filter(ImageFilter.GaussianBlur(1.5)),
-            )
-            return all(maximum <= max_pixel_delta for _minimum, maximum in difference.getextrema())
-    except (OSError, ValueError):
+def _same_pixels(
+    left: Image.Image, right: Image.Image, *, left_blurred: Image.Image, max_pixel_delta: int = 8,
+) -> bool:
+    difference = ImageChops.difference(left, right)
+    peak_delta = max(maximum for _minimum, maximum in difference.getextrema())
+    if peak_delta <= max_pixel_delta:
+        return True
+    if peak_delta > 128:
         return False
+    difference = ImageChops.difference(left_blurred, right.filter(ImageFilter.GaussianBlur(1.5)))
+    return all(maximum <= max_pixel_delta for _minimum, maximum in difference.getextrema())
 
 
 def detect_plateaus(
