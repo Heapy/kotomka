@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     selected_frame_min_gap_seconds: int = 20
     openai_model: str = "gpt-4.1"
     openai_scoring_model: str | None = None
-    codex_model: str = "gpt-5.4"
+    codex_model: str = "gpt-6-astra"
     codex_scoring_model: str | None = None
     scoring_image_detail: str = "low"
     report_image_detail: str = "high"

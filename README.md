@@ -87,7 +87,7 @@ prefix. Everything has a sensible default; the most useful knobs:
 | --- | --- | --- |
 | `KOTOMKA_STT_PROVIDER` | `fake` | `fake`, `assemblyai`, or `whisper` |
 | `KOTOMKA_LLM_PROVIDER` | `auto` | `auto`, `fake`, `openai`, `codex_subscription` |
-| `KOTOMKA_OPENAI_MODEL` / `KOTOMKA_CODEX_MODEL` | `gpt-4.1` / `gpt-5.4` | report + assessment model |
+| `KOTOMKA_OPENAI_MODEL` / `KOTOMKA_CODEX_MODEL` | `gpt-4.1` / `gpt-6-astra` | report + assessment model |
 | `KOTOMKA_OPENAI_SCORING_MODEL` / `KOTOMKA_CODEX_SCORING_MODEL` | unset | cheaper model for frame scoring (falls back to the main model) |
 | `KOTOMKA_REPORT_MAX_IMAGES` | `16` | selected frame images attached to the report call |
 | `KOTOMKA_REPORT_SINGLE_PASS_MAX_CHARS` | `24000` | transcripts longer than this are map-reduced |

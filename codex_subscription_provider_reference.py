@@ -784,7 +784,7 @@ def create_codex_openai_client(creds: RuntimeCredentials):
 def codex_chat(
     prompt: str,
     *,
-    model: str = "gpt-5.4",
+    model: str = "gpt-6-astra",
     stream_to_stdout: bool = True,
     session_id: Optional[str] = None,
 ) -> CodexResponse:
@@ -880,7 +880,7 @@ def main() -> None:
     sub.add_parser("login", help="Run Codex device-code login and save tokens")
     chat = sub.add_parser("chat", help="Send one prompt through the Codex subscription route")
     chat.add_argument("prompt")
-    chat.add_argument("--model", default="gpt-5.4")
+    chat.add_argument("--model", default="gpt-6-astra")
     chat.add_argument("--session-id", default=None)
     sub.add_parser("models", help="List visible Codex model slugs")
     sub.add_parser("usage", help="Print raw Codex usage/plan payload")

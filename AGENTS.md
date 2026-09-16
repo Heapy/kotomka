@@ -100,6 +100,8 @@ LLM providers:
 - `fake`: offline report and frame scoring.
 - `openai`: OpenAI Platform Responses API, requires `OPENAI_API_KEY`.
 - `codex_subscription`: ChatGPT/Codex OAuth route; run `uv run kotomka codex-login`.
+  Defaults to `gpt-6-astra` for reports, assessment, and frame scoring;
+  `KOTOMKA_CODEX_SCORING_MODEL` can override the scoring model.
 
 Provider defaults are configured through `.env.local` and `KOTOMKA_*` settings.
 Do not print secret values in logs, tests, or terminal output.
