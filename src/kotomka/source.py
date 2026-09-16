@@ -6,6 +6,7 @@ import shlex
 import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -48,15 +49,22 @@ class YtDlpSourceProvider(SourceProvider):
         require_binary("yt-dlp")
         media_dir = artifact_dir / "media"
         media_dir.mkdir(parents=True, exist_ok=True)
-        output_template = str(media_dir / "source.%(ext)s")
-        command = _yt_dlp_command(payload, output_template)
-        try:
-            run_command(command, timeout=60 * 60)
-        except RuntimeError as exc:
-            raise RuntimeError(_yt_dlp_error_message(str(exc), payload, command=command)) from exc
-
         info_path = media_dir / "source.info.json"
-        video_path = _find_downloaded_video(media_dir)
+        with TemporaryDirectory(prefix=".download-", dir=media_dir) as temporary:
+            download_dir = Path(temporary)
+            command = _yt_dlp_command(payload, str(download_dir / "source.%(ext)s"))
+            try:
+                run_command(command, timeout=60 * 60)
+            except RuntimeError as exc:
+                raise RuntimeError(_yt_dlp_error_message(str(exc), payload, command=command)) from exc
+            downloaded = _find_downloaded_video(download_dir)
+            video_path = media_dir / downloaded.name
+            downloaded.replace(video_path)
+            downloaded_info = download_dir / "source.info.json"
+            if downloaded_info.exists():
+                downloaded_info.replace(info_path)
+            else:
+                info_path.unlink(missing_ok=True)
         metadata = _metadata_from_info(info_path, payload.source_url)
         duration = metadata.duration_s or ffprobe_duration(video_path)
         metadata.duration_s = duration
@@ -176,7 +184,9 @@ def _find_downloaded_video(media_dir: Path) -> Path:
     candidates = [path for path in candidates if not path.name.endswith(".info.json") and path.name not in AUDIO_ARTIFACT_NAMES]
     if not candidates:
         raise RuntimeError("yt-dlp did not produce a video file")
-    return max(candidates, key=lambda path: path.stat().st_size)
+    if len(candidates) != 1:
+        raise RuntimeError("yt-dlp produced multiple possible video files")
+    return candidates[0]
 
 
 def _metadata_from_info(info_path: Path, source_url: str) -> VideoMetadata:

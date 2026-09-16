@@ -8,6 +8,8 @@ import pytest
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from kotomka.media import (
+    _extract_scene_frames,
+    extract_frame_at,
     blur_score,
     compute_gap_fill_timestamps,
     dedupe_frames,
@@ -19,6 +21,18 @@ from kotomka.models import CandidateFrame
 needs_ffmpeg = pytest.mark.skipif(
     not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="ffmpeg/ffprobe required"
 )
+
+
+def test_scene_extraction_does_not_invent_timestamps_for_old_files(tmp_path, monkeypatch):
+    (tmp_path / "scene_00001.png").write_bytes(b"old")
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", ""))
+    assert _extract_scene_frames(Path("video.mp4"), tmp_path) == []
+
+
+def test_empty_seek_does_not_return_a_previous_frame(tmp_path, monkeypatch):
+    (tmp_path / "frame.png").write_bytes(b"old")
+    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess([], 0, "", ""))
+    assert extract_frame_at(Path("video.mp4"), tmp_path, 1000, "frame.png") is None
 
 
 def test_detect_plateaus_finds_stable_runs() -> None:
@@ -161,3 +175,7 @@ def test_extract_candidate_frames_detects_slides(tmp_path: Path) -> None:
     assert all(frame.dwell_s and frame.dwell_s >= 3.0 for frame in plateau_frames)
     assert frames == sorted(frames, key=lambda frame: frame.timestamp_s)
     assert not (frames_dir / "thumbs_work").exists()
+    old_images = {frame.path: frame.path.read_bytes() for frame in frames}
+    retried = extract_candidate_frames(video, frames_dir, duration_s=12)
+    assert {frame.path for frame in retried}.isdisjoint(old_images)
+    assert all(path.read_bytes() == content for path, content in old_images.items())

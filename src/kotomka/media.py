@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from PIL import Image, ImageChops, ImageFilter, ImageStat
 
@@ -82,6 +83,27 @@ def extract_candidate_frames(
     plateau_min_dwell_s: float = 3.0,
     plateau_hash_distance: int = 3,
     blur_threshold: float = 0.0,
+) -> list[CandidateFrame]:
+    frames_dir.mkdir(parents=True, exist_ok=True)
+    with TemporaryDirectory(prefix=".extract-", dir=frames_dir) as temporary:
+        work_dir = Path(temporary)
+        candidates = _collect_candidate_frames(
+            video_path, work_dir, duration_s=duration_s, interval_seconds=interval_seconds,
+            max_gap_seconds=max_gap_seconds, plateau_min_dwell_s=plateau_min_dwell_s,
+            plateau_hash_distance=plateau_hash_distance, blur_threshold=blur_threshold,
+        )
+        result = []
+        for frame in candidates:
+            path = frames_dir / f"{work_dir.name.removeprefix('.extract-')}-{frame.path.name}"
+            frame.path.replace(path)
+            result.append(frame.model_copy(update={"path": path}))
+        return result
+
+
+def _collect_candidate_frames(
+    video_path: Path, frames_dir: Path, *, duration_s: float, interval_seconds: int,
+    max_gap_seconds: int, plateau_min_dwell_s: float, plateau_hash_distance: int,
+    blur_threshold: float,
 ) -> list[CandidateFrame]:
     """Collect candidate frames from three sources.
 
@@ -188,10 +210,11 @@ def _extract_scene_frames(video_path: Path, frames_dir: Path) -> list[CandidateF
     if result.returncode != 0:
         return []
     timestamps = parse_showinfo_timestamps(result.stderr)
-    paths = sorted(frames_dir.glob("scene_*.png"))
     candidates: list[CandidateFrame] = []
-    for index, path in enumerate(paths):
-        timestamp = timestamps[index] if index < len(timestamps) else float(index)
+    for index, timestamp in enumerate(timestamps):
+        path = frames_dir / f"scene_{index + 1:05d}.png"
+        if not path.is_file():
+            continue
         candidates.append(CandidateFrame(frame_id=f"scene-{index + 1:04d}", timestamp_s=timestamp, path=path, source="scene"))
     return candidates
 
@@ -310,6 +333,7 @@ def compute_gap_fill_timestamps(
 
 def extract_frame_at(video_path: Path, frames_dir: Path, timestamp_s: float, name: str) -> Path | None:
     output = frames_dir / name
+    output.unlink(missing_ok=True)
     result = subprocess.run(
         [
             "ffmpeg",

@@ -91,6 +91,12 @@ holds a SQLite write transaction to exclude concurrent retries. Invalid/incomple
 reports are skipped. Existing completed jobs can be cleaned with
 `uv run kotomka cleanup-frames` (`--dry-run` previews counts and bytes).
 
+Each extraction attempt uses a fresh temporary directory and publishes surviving
+frames with unique filename prefixes. Retries cannot reuse stale scene suffixes
+or overwrite images of the previous report. Scene files require matching ffmpeg
+timestamps. Downloads also run in a fresh staging directory and require exactly
+one resulting video, so an older, larger media file cannot become the new source.
+
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
 Deletion is conditional on terminal status in the same SQL statement, so a
 concurrent retry cannot have its queued job or artifacts removed. Workers skip

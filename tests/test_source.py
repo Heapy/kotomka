@@ -72,6 +72,24 @@ def test_find_downloaded_video_ignores_audio_artifacts(tmp_path: Path) -> None:
     assert _find_downloaded_video(tmp_path).name == "source.mp4"
 
 
+def test_retry_cannot_select_old_larger_download(tmp_path, monkeypatch):
+    import kotomka.source as source
+    media = tmp_path / "media"
+    media.mkdir()
+    old = media / "source.webm"
+    old.write_bytes(b"old" * 100)
+
+    def download(command, **kwargs):
+        target = Path(command[command.index("-o") + 1].replace("%(ext)s", "mp4"))
+        target.write_bytes(b"new")
+        target.with_suffix(".info.json").write_text('{"duration": 1}')
+
+    monkeypatch.setattr(source, "require_binary", lambda name: name)
+    monkeypatch.setattr(source, "run_command", download)
+    result = source.YtDlpSourceProvider().fetch(JobCreate(source_url="https://example.com/video"), tmp_path)
+    assert result.video_path.read_bytes() == b"new"
+
+
 def test_metadata_from_info_caps_description(tmp_path: Path) -> None:
     info_path = write_info(tmp_path, {"title": "Long", "description": "x" * (MAX_DESCRIPTION_CHARS + 500)})
     metadata = _metadata_from_info(info_path, "https://example.com/v")
