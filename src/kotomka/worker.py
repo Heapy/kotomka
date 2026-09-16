@@ -9,6 +9,7 @@ from .media import extract_audio, extract_candidate_frames, limit_candidates
 from .models import CandidateFrame, Chapter, FrameSelection, Transcript
 from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
 from .providers.llm.base import LlmProvider
+from .providers.llm.concurrency import parallel_map
 from .providers.llm import get_llm_provider
 from .providers.stt import get_stt_provider
 from .reporting import normalize_report, save_report
@@ -194,9 +195,9 @@ def _score_frames_across_timeline(
     batch_size = max(1, int(batch_size))
     by_id = {frame.frame_id: frame for frame in frames}
     scored: dict[str, FrameSelection] = {}
-    for start in range(0, len(frames), batch_size):
-        batch = frames[start : start + batch_size]
-        for selection in llm.score_frames(batch, transcript):
+    batches = [frames[start:start + batch_size] for start in range(0, len(frames), batch_size)]
+    for selections in parallel_map(lambda batch: llm.score_frames(batch, transcript), batches):
+        for selection in selections:
             frame = by_id.get(selection.frame_id)
             if frame is None:
                 continue

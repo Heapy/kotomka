@@ -25,6 +25,7 @@ from ...models import (
 from ...transcripts import chunk_transcript, format_segment_line, format_transcript, frame_excerpts
 from ...utils import write_json
 from .base import LlmProvider
+from .concurrency import parallel_map
 from .json_helpers import ASSESSMENT_SCHEMA, FRAME_SCORE_SCHEMA, NOTES_SCHEMA, RECAPTION_SCHEMA, REPORT_SCHEMA
 from .prompts import (
     ASSESSMENT_INSTRUCTIONS,
@@ -229,9 +230,8 @@ class JsonLlmProviderBase(LlmProvider):
             target_seconds=settings.report_chunk_target_seconds,
             duration_s=source.metadata.duration_s or transcript.duration_s,
         )
-        collected: list[dict[str, Any]] = []
-        successful_requests = 0
-        for index, chunk in enumerate(chunks):
+        def collect_chunk(indexed_chunk):
+            index, chunk = indexed_chunk
             chunk_text = "\n".join(
                 format_segment_line(segment, low_confidence_below=settings.transcript_low_confidence_threshold)
                 for segment in chunk.segments
@@ -253,22 +253,24 @@ class JsonLlmProviderBase(LlmProvider):
                     schema_name="chunk_notes",
                     schema=NOTES_SCHEMA,
                 )
-                successful_requests += 1
+                success = True
             except Exception:
                 # One unparseable chunk must not sink the whole report.
                 traceback.print_exc()
                 payload = {}
-            collected.append(
-                {
-                    "title": chunk.title,
-                    "start_s": chunk.start_s,
-                    "end_s": chunk.end_s,
-                    **coerce_notes(payload),
-                }
-            )
+                success = False
+            return {
+                "title": chunk.title,
+                "start_s": chunk.start_s,
+                "end_s": chunk.end_s,
+                **coerce_notes(payload),
+            }, success
+
+        results = parallel_map(collect_chunk, enumerate(chunks))
+        collected = [notes for notes, _ in results]
         if work_dir is not None:
             write_json(work_dir / "notes.json", collected)
-        if chunks and successful_requests == 0:
+        if chunks and not any(success for _, success in results):
             raise RuntimeError("All transcript chunk notes failed; retry the job before generating a report")
         return notes_to_text(collected)
 

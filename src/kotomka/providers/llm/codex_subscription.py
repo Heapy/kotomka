@@ -14,6 +14,7 @@ import httpx
 from openai import AuthenticationError, OpenAI
 
 from ...config import get_settings
+from .concurrency import limit_llm_requests
 from .json_base import ImageInput, JsonLlmProviderBase, image_data_url
 from .json_helpers import parse_json_object
 
@@ -54,6 +55,7 @@ class CodexSubscriptionProvider(JsonLlmProviderBase):
     def _scoring_model(self) -> str | None:
         return self.scoring_model
 
+    @limit_llm_requests
     def _request_json(
         self,
         *,

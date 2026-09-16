@@ -3,6 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import Mock
+from threading import Barrier
 
 import pytest
 
@@ -254,6 +255,20 @@ def test_build_report_map_reduces_long_transcripts(tmp_path: Path, monkeypatch) 
     saved_notes = json.loads((tmp_path / "notes.json").read_text(encoding="utf-8"))
     assert len(saved_notes) == 3
     assert saved_notes[0]["notes"][0]["text"] == "42 rps"
+
+
+def test_notes_chunks_run_concurrently_but_remain_in_timeline_order(tmp_path, monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(settings, "report_chunk_target_seconds", 100)
+    ready = Barrier(3)
+    class ConcurrentNotes(StubJsonLlm):
+        def _request_json(self, **kwargs):
+            index = json.loads(kwargs["text"].split("\n\n")[0])["chunk_index"]
+            ready.wait(timeout=3)
+            return {"chunk_summary": f"part {index}", "notes": []}
+    ConcurrentNotes([])._chunk_notes_text(make_source(), make_transcript(), tmp_path, settings)
+    saved = json.loads((tmp_path / "notes.json").read_text())
+    assert [chunk["chunk_summary"] for chunk in saved] == ["part 1", "part 2", "part 3"]
 
 
 def test_build_report_tolerates_failed_notes_chunk(tmp_path: Path, monkeypatch) -> None:

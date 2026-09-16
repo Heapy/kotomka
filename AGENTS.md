@@ -214,6 +214,13 @@ for each timestamp and deduplicating overlapping excerpts. Oversized segments ar
 explicitly truncated rather than excluding later frames. Frame labels carry dwell
 time and OCR text as scoring evidence.
 
+Independent scoring batches and transcript-notes chunks share one process-wide
+pool of four threads. Results are merged in input order (and scores by frame ID).
+Both live transports also share a four-request semaphore, including synchronous
+report/recaption/assessment calls, so concurrent jobs cannot multiply the HTTP
+limit. A failed stage cancels pending work and joins in-flight calls before exit;
+notes retain the existing partial-failure policy and fail if every chunk fails.
+
 - `KOTOMKA_MAX_FRAMES_FOR_LLM`: batch size for one scoring request.
 - `KOTOMKA_MAX_CANDIDATE_FRAMES`: candidate budget before full-resolution extraction
   and again after OCR, before scoring (default 150).

@@ -1,4 +1,5 @@
 from pathlib import Path
+from threading import Barrier
 
 from kotomka.models import CandidateFrame, Chapter, FrameSelection, Transcript
 from kotomka.providers.llm.base import LlmProvider
@@ -47,6 +48,17 @@ def test_score_frames_batches_entire_timeline(tmp_path: Path) -> None:
     assert llm.batches[0][0] == "f-00"
     assert llm.batches[-1][-1] == "f-49"
     assert "f-49" in {frame.frame_id for frame in selected}
+
+
+def test_scoring_batches_run_concurrently_and_merge_by_id(tmp_path):
+    ready = Barrier(3)
+    class ConcurrentLlm(RecordingLlm):
+        def score_frames(self, frames, transcript):
+            ready.wait(timeout=3)
+            return super().score_frames(frames, transcript)
+    selected = _score_frames_across_timeline(ConcurrentLlm(), _frames(tmp_path, count=6), Transcript(),
+                                            batch_size=2, max_selected=6, min_gap_seconds=0)
+    assert [frame.frame_id for frame in selected] == [f"f-{index:02d}" for index in range(6)]
 
 
 def test_select_diverse_frames_prefers_spread_then_fills() -> None:

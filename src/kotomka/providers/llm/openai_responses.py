@@ -6,6 +6,7 @@ from typing import Any
 from openai import OpenAI
 
 from ...config import get_settings
+from .concurrency import limit_llm_requests
 from .json_base import ImageInput, JsonLlmProviderBase, image_data_url
 from .json_helpers import parse_json_object
 
@@ -28,6 +29,7 @@ class OpenAiResponsesProvider(JsonLlmProviderBase):
     def _supports_tools(self) -> bool:
         return True
 
+    @limit_llm_requests
     def _request_json(
         self,
         *,
