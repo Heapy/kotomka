@@ -80,6 +80,31 @@ def test_score_frames_uses_windowed_excerpt_and_scoring_model(tmp_path: Path) ->
     assert "frame_id=frame-00" in call["images"][0].label
 
 
+@pytest.mark.parametrize("operation,budget", [("score", 6000), ("recaption", 4000)])
+def test_frame_context_covers_each_frame_across_a_long_video(tmp_path: Path, operation: str, budget: int) -> None:
+    transcript = Transcript(duration_s=1800, segments=[
+        TranscriptSegment(start_s=i * 10, end_s=(i + 1) * 10, text=f"topic-{i:03d} " + "detail " * 40)
+        for i in range(180)
+    ])
+    stub = StubJsonLlm([{"frames": []}])
+    if operation == "score":
+        frames = make_frames(tmp_path, count=24)
+        for i, frame in enumerate(frames):
+            frame.timestamp_s = i * 75 + 5
+        stub.score_frames(frames, transcript)
+        excerpt = stub.calls[0]["text"].split("Transcript excerpt:\n", 1)[1].split("\n\nScore these", 1)[0]
+    else:
+        selections = make_selection_files(tmp_path, 24)
+        for i, selection in enumerate(selections):
+            selection.timestamp_s = i * 75 + 5
+        stub.recaption_frames(selections, work_dir=tmp_path, transcript=transcript)
+        excerpt = stub.calls[0]["text"].split("Transcript context:\n", 1)[1].split("\n\nRe-caption", 1)[0]
+    assert len(excerpt) <= budget
+    for i in range(24):
+        segment_index = int((i * 75 + 5) // 10)
+        assert f"topic-{segment_index:03d}" in excerpt
+
+
 def test_build_report_sends_compact_transcript_without_words(tmp_path: Path) -> None:
     frames_dir = tmp_path / "frames"
     frames_dir.mkdir()

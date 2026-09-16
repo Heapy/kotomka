@@ -160,8 +160,10 @@ later slide are dropped (`src/kotomka/ocr.py`), and the recognized text is passe
 to the frame-scoring prompt and into `FrameSelection.ocr_text` for the report.
 Without ocrmac the step is a silent no-op.
 
-LLM frame scoring is batched across the full timeline, with each batch scored
-against the transcript window covering its time range. Frame labels carry dwell
+LLM frame scoring is batched across the full timeline. Scoring and re-captioning
+share their fixed transcript budget across the frames, prioritizing nearby speech
+for each timestamp and deduplicating overlapping excerpts. Oversized segments are
+explicitly truncated rather than excluding later frames. Frame labels carry dwell
 time and OCR text as scoring evidence.
 
 - `KOTOMKA_MAX_FRAMES_FOR_LLM`: batch size for one scoring request.

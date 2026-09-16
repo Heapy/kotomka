@@ -53,6 +53,46 @@ def window_excerpt(
     return _join_whole_lines(lines, max_chars)
 
 
+def frame_excerpts(
+    transcript: Transcript,
+    timestamps_s: list[float],
+    *,
+    margin_s: float = 30.0,
+    max_chars: int = 6000,
+    low_confidence_below: float = 0.0,
+) -> str:
+    """Share the context budget between frames, prioritizing speech at each frame."""
+    neighborhoods = []
+    for timestamp in sorted(set(timestamps_s)):
+        nearby = [
+            index for index, segment in enumerate(transcript.segments)
+            if segment.end_s >= timestamp - margin_s and segment.start_s <= timestamp + margin_s
+        ]
+        nearby.sort(key=lambda index: (
+            not (transcript.segments[index].start_s <= timestamp < transcript.segments[index].end_s),
+            max(transcript.segments[index].start_s - timestamp, timestamp - transcript.segments[index].end_s, 0),
+            abs((transcript.segments[index].start_s + transcript.segments[index].end_s) / 2 - timestamp),
+        ))
+        if nearby:
+            neighborhoods.append(nearby)
+    if not neighborhoods or max_chars <= 0:
+        return ""
+    quota = max(0, (max_chars - len(neighborhoods) + 1) // len(neighborhoods))
+    selected: dict[int, str] = {}
+    for nearby in neighborhoods:
+        remaining = quota
+        for position, index in enumerate(nearby):
+            line = format_segment_line(transcript.segments[index], low_confidence_below=low_confidence_below)
+            if len(line) > remaining:
+                if position or remaining <= 1:
+                    break
+                line = line[:remaining - 1] + "…"
+            if len(line) > len(selected.get(index, "")):
+                selected[index] = line
+            remaining -= len(line) + 1
+    return "\n".join(selected[index] for index in sorted(selected, key=lambda i: transcript.segments[i].start_s))
+
+
 def chunk_transcript(
     transcript: Transcript,
     chapters: list[Chapter],

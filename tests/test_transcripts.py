@@ -1,5 +1,5 @@
 from kotomka.models import Chapter, Transcript, TranscriptSegment
-from kotomka.transcripts import chunk_transcript, format_segment_line, format_transcript, window_excerpt
+from kotomka.transcripts import chunk_transcript, format_segment_line, format_transcript, frame_excerpts, window_excerpt
 
 
 def make_transcript() -> Transcript:
@@ -45,6 +45,24 @@ def test_window_excerpt_selects_overlapping_segments_with_margin() -> None:
     wide = window_excerpt(transcript, start_s=100, end_s=110, margin_s=95)
     assert "intro words" in wide
     assert "late words" in wide
+
+
+def test_frame_excerpts_deduplicate_shared_context_and_keep_confidence() -> None:
+    excerpt = frame_excerpts(make_transcript(), [100, 101, 102, 101], low_confidence_below=0.5)
+    assert excerpt.count("middle words") == 1
+    assert "[low-confidence]" in excerpt
+    assert "intro words" not in excerpt
+    assert "late words" not in excerpt
+    assert frame_excerpts(make_transcript(), []) == ""
+    assert frame_excerpts(make_transcript(), [100], max_chars=0) == ""
+
+
+def test_frame_excerpts_keep_a_bounded_piece_of_an_oversized_segment() -> None:
+    transcript = Transcript(segments=[TranscriptSegment(start_s=0, end_s=60, text="relevant words " * 1000)])
+    excerpt = frame_excerpts(transcript, [30], max_chars=100)
+    assert "relevant words" in excerpt
+    assert excerpt.endswith("…")
+    assert len(excerpt) == 100
 
 
 def segments_every(step_s: float, *, duration_s: float) -> list[TranscriptSegment]:

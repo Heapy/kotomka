@@ -22,7 +22,7 @@ from ...models import (
     Transcript,
     VideoMetadata,
 )
-from ...transcripts import chunk_transcript, format_segment_line, format_transcript, window_excerpt
+from ...transcripts import chunk_transcript, format_segment_line, format_transcript, frame_excerpts
 from ...utils import write_json
 from .base import LlmProvider
 from .json_helpers import ASSESSMENT_SCHEMA, FRAME_SCORE_SCHEMA, NOTES_SCHEMA, RECAPTION_SCHEMA, REPORT_SCHEMA
@@ -74,10 +74,9 @@ class JsonLlmProviderBase(LlmProvider):
         if not frames:
             return []
         settings = get_settings()
-        excerpt = window_excerpt(
+        excerpt = frame_excerpts(
             transcript,
-            start_s=min(frame.timestamp_s for frame in frames),
-            end_s=max(frame.timestamp_s for frame in frames),
+            [frame.timestamp_s for frame in frames],
             margin_s=float(settings.transcript_excerpt_margin_seconds),
             low_confidence_below=settings.transcript_low_confidence_threshold,
         )
@@ -160,12 +159,12 @@ class JsonLlmProviderBase(LlmProvider):
             return selections
         text = "Re-caption these frames."
         if transcript is not None and transcript.segments:
-            excerpt = window_excerpt(
+            excerpt = frame_excerpts(
                 transcript,
-                start_s=min(item.timestamp_s for item in selections),
-                end_s=max(item.timestamp_s for item in selections),
+                [item.timestamp_s for item in selections],
                 margin_s=float(settings.transcript_excerpt_margin_seconds),
                 max_chars=4000,
+                low_confidence_below=settings.transcript_low_confidence_threshold,
             )
             text = f"Transcript context:\n{excerpt}\n\n{text}"
         try:
