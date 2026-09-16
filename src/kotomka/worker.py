@@ -5,7 +5,7 @@ from queue import Empty, Queue
 from threading import Event, Semaphore, Thread
 
 from .config import Settings
-from .media import extract_candidate_frames
+from .media import extract_audio, extract_candidate_frames
 from .models import CandidateFrame, Chapter, FrameSelection, Transcript
 from .ocr import annotate_frames_with_ocr, dedupe_ocr_supersets, ocr_available
 from .providers.llm.base import LlmProvider
@@ -78,6 +78,8 @@ class JobWorker:
                 raise RuntimeError("Video is longer than the configured 2 hour MVP limit")
             write_json(job.artifact_dir / "source.json", source.model_dump())
 
+            self.store.update_job(job_id, progress=15, message="Extracting audio")
+            extract_audio(source.video_path, source.audio_path)
             self.store.update_job(job_id, progress=25, message="Transcribing audio")
             stt = get_stt_provider(job.input.stt_provider)
             transcript = stt.transcribe(

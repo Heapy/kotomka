@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from .media import extract_audio, ffprobe_duration, require_binary, run_command
+from .media import ffprobe_duration, require_binary, run_command
 from .models import Chapter, JobCreate, SourceArtifact, VideoMetadata
 
 MAX_DESCRIPTION_CHARS = 4000
@@ -36,6 +36,7 @@ AUDIO_ARTIFACT_NAMES = {"audio.flac", "audio.mp3"}
 class SourceProvider(ABC):
     @abstractmethod
     def fetch(self, payload: JobCreate, artifact_dir: Path) -> SourceArtifact:
+        """Fetch video and metadata; audio_path is the destination for later extraction."""
         raise NotImplementedError
 
 
@@ -59,7 +60,7 @@ class YtDlpSourceProvider(SourceProvider):
         metadata = _metadata_from_info(info_path, payload.source_url)
         duration = metadata.duration_s or ffprobe_duration(video_path)
         metadata.duration_s = duration
-        audio_path = extract_audio(video_path, media_dir / "audio.flac")
+        audio_path = media_dir / "audio.flac"
         return SourceArtifact(metadata=metadata, video_path=video_path, audio_path=audio_path, info_path=info_path)
 
 
@@ -164,7 +165,7 @@ class LocalFileSourceProvider(SourceProvider):
         if source_path.resolve() != video_path.resolve():
             shutil.copy2(source_path, video_path)
         duration = ffprobe_duration(video_path)
-        audio_path = extract_audio(video_path, media_dir / "audio.flac")
+        audio_path = media_dir / "audio.flac"
         metadata = VideoMetadata(source_url=payload.source_url, title=source_path.stem, duration_s=duration)
         return SourceArtifact(metadata=metadata, video_path=video_path, audio_path=audio_path)
 

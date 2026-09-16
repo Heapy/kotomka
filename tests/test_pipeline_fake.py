@@ -5,10 +5,12 @@ import subprocess
 import time
 from pathlib import Path
 from threading import Event
+from unittest.mock import Mock
 
 import pytest
 
 import kotomka.worker as worker_module
+import kotomka.source as source_module
 from kotomka.config import Settings
 from kotomka.models import JobCreate, SourceArtifact
 from kotomka.providers.llm.fake import FakeLlmProvider
@@ -162,6 +164,63 @@ def test_worker_pool_serializes_downloads(tmp_path: Path) -> None:
     assert len(starts) == 2 and len(ends) == 2
     # The second download must not begin until the first one has finished.
     assert starts[1] >= ends[0]
+
+
+def test_duration_limit_is_checked_before_audio_extraction(tmp_path: Path, monkeypatch) -> None:
+    video = tmp_path / "too-long.mp4"
+    video.write_bytes(b"video")
+    monkeypatch.setattr(source_module, "ffprobe_duration", lambda path: 20)
+    extract = Mock(return_value=tmp_path / "audio.flac")
+    monkeypatch.setattr(worker_module, "extract_audio", extract)
+    store, worker = make_worker(tmp_path)
+    worker.settings.max_video_duration_seconds = 10
+    job = store.create_job(JobCreate(source_url=video.as_uri(), stt_provider="fake", llm_provider="fake"))
+
+    worker.process(job.id)
+
+    assert store.get_job(job.id).status == "failed"
+    assert "longer" in store.get_job(job.id).error
+    extract.assert_not_called()
+
+
+def test_audio_extraction_does_not_block_the_next_download(tmp_path: Path, monkeypatch) -> None:
+    video = tmp_path / "video.mp4"
+    video.write_bytes(b"video")
+    monkeypatch.setattr(source_module, "ffprobe_duration", lambda path: 3)
+    first_audio_started = Event()
+    release_audio = Event()
+    second_download_finished = Event()
+    store, worker = make_worker(tmp_path)
+    worker.settings.worker_pool_size = 2
+    jobs = [store.create_job(JobCreate(source_url=video.as_uri(), stt_provider="fake", llm_provider="fake")) for _ in range(2)]
+    fetch = worker.source_provider.fetch
+    downloads = []
+
+    def tracked_fetch(payload, artifact_dir):
+        result = fetch(payload, artifact_dir)
+        downloads.append(artifact_dir)
+        if len(downloads) == 2:
+            second_download_finished.set()
+        return result
+
+    def extract(video_path, audio_path):
+        first_audio_started.set()
+        assert release_audio.wait(timeout=5)
+        audio_path.write_bytes(b"audio")
+        return audio_path
+
+    monkeypatch.setattr(worker.source_provider, "fetch", tracked_fetch)
+    monkeypatch.setattr(worker_module, "extract_audio", extract)
+    monkeypatch.setattr(worker_module, "extract_candidate_frames", lambda *args, **kwargs: [])
+    worker.start()
+    try:
+        assert first_audio_started.wait(timeout=2)
+        assert second_download_finished.wait(timeout=1), "The download permit is still held during audio extraction"
+    finally:
+        release_audio.set()
+        worker._queue.join()
+        worker.stop()
+    assert all(store.get_job(job.id).status == "completed" for job in jobs)
 
 
 def test_worker_restarts_after_stop(tmp_path: Path) -> None:

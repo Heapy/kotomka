@@ -14,7 +14,9 @@ Main flow:
    this step is serialized across the whole pool (one download at a time) to
    avoid tripping YouTube's bot detection and saturating bandwidth, while
    transcription, frame extraction, and LLM calls for other jobs proceed
-   unblocked. `ffmpeg` extracts mono 16 kHz FLAC audio, and yt-dlp metadata
+   unblocked. `SourceProvider.fetch` returns the video, metadata, and intended
+   audio path without transcoding. After releasing the download permit, the worker
+   checks the duration limit before `ffmpeg` extracts mono 16 kHz FLAC audio. yt-dlp metadata
    (description, tags, upload date, language, chapters) is carried into
    `VideoMetadata`.
 3. `SttProvider` returns a normalized speaker-labeled `Transcript`; the raw provider
