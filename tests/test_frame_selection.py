@@ -72,7 +72,10 @@ def test_select_diverse_frames_guarantees_chapter_coverage() -> None:
         Chapter(title="Empty", start_s=400, end_s=500),
     ]
 
-    selected = _select_diverse_frames(selections, max_selected=2, min_gap_seconds=20, chapters=chapters)
+    without_chapters = _select_diverse_frames(selections, max_selected=2, min_gap_seconds=0)
+    assert [frame.frame_id for frame in without_chapters] == ["a", "b"]
+
+    selected = _select_diverse_frames(selections, max_selected=2, min_gap_seconds=0, chapters=chapters)
 
     # without chapters the two top-scored frames (a, b) would win; the Demo
     # chapter's only candidate displaces the lower of them
