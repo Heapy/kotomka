@@ -146,7 +146,19 @@ def _same_visual_content(first: Path, second: Path, *, max_pixel_delta: int = 8)
         with Image.open(first) as left, Image.open(second) as right:
             if left.size != right.size:
                 return False
-            difference = ImageChops.difference(left.convert("RGBA"), right.convert("RGBA"))
+            left_pixels, right_pixels = left.convert("RGBA"), right.convert("RGBA")
+            difference = ImageChops.difference(left_pixels, right_pixels)
+            peak_delta = max(maximum for _minimum, maximum in difference.getextrema())
+            if peak_delta <= max_pixel_delta:
+                return True
+            if peak_delta > 128:
+                return False
+            # Suppress codec ringing locally, without averaging away a changed
+            # glyph merely because it occupies a small fraction of the slide.
+            difference = ImageChops.difference(
+                left_pixels.filter(ImageFilter.GaussianBlur(1.5)),
+                right_pixels.filter(ImageFilter.GaussianBlur(1.5)),
+            )
             return all(maximum <= max_pixel_delta for _minimum, maximum in difference.getextrema())
     except (OSError, ValueError):
         return False

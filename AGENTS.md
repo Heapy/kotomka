@@ -158,8 +158,10 @@ transition-blurred plateau/scene candidates before LLM scoring. Perceptual-hash
 dedupe runs in source-priority order (plateau, then scene, then periodic), so the
 post-animation plateau frame wins over a mid-transition scene duplicate.
 Perceptual hashes only shortlist duplicates: deletion also requires pixelwise
-agreement (at most 8 levels per channel). Changed slide text, numbers, and builds
-are retained even when their hashes collide, so OCR and scoring can inspect them.
+agreement (at most 8 levels per channel). Bounded codec ringing can pass a local
+1.5-pixel blur check; differences above 128 levels always survive. This preserves
+changed slide text, numbers, and builds while collapsing repeated slides after
+video compression, before OCR and scoring inspect the surviving frames.
 
 When the `ocr` extra is installed (ocrmac, macOS Apple Vision) and
 `KOTOMKA_FRAME_OCR_ENABLED` is on (default), candidates are OCR-annotated after

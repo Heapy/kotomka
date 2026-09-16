@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from kotomka.media import (
     blur_score,
@@ -67,6 +67,37 @@ def test_dedupe_prefers_plateau_over_scene(tmp_path: Path) -> None:
     ]
     kept = dedupe_frames(frames)
     assert [frame.frame_id for frame in kept] == ["plateau-0001"]
+
+
+@needs_ffmpeg
+def test_dedupe_collapses_a_repeated_slide_after_h264_encoding(tmp_path: Path) -> None:
+    font = ImageFont.load_default(size=28)
+    for index in range(2):
+        slide = Image.new("RGB", (1280, 720), "white")
+        draw = ImageDraw.Draw(slide)
+        draw.rectangle((0, 0, 1280, 110), fill="#17385c")
+        draw.text((45, 30), "Production checklist" if not index else "Next topic", font=font, fill="white")
+        for row, text in enumerate(["1. Check service health", "2. Confirm replica status", "3. Never log access tokens"]):
+            draw.text((60, 190 + 80 * row), text if not index else f"Another topic {row}", font=font, fill="black")
+        slide.save(tmp_path / f"slide-{index}.png")
+    concat = tmp_path / "slides.txt"
+    concat.write_text(
+        "file 'slide-0.png'\nduration 2\nfile 'slide-1.png'\nduration 2\nfile 'slide-0.png'\nduration 2\nfile 'slide-0.png'\n",
+        encoding="utf-8",
+    )
+    video = tmp_path / "slides.mp4"
+    subprocess.run([
+        "ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(concat),
+        "-vf", "fps=25", "-c:v", "libx264", "-crf", "23", "-pix_fmt", "yuv420p", str(video),
+    ], check=True)
+    frames = []
+    for index, timestamp in enumerate([0.5, 4.5]):
+        path = tmp_path / f"frame-{index}.png"
+        subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error", "-ss", str(timestamp), "-i", str(video), "-frames:v", "1", str(path),
+        ], check=True)
+        frames.append(CandidateFrame(frame_id=str(index), timestamp_s=timestamp, path=path, source="plateau"))
+    assert [frame.frame_id for frame in dedupe_frames(frames)] == ["0"]
 
 
 @needs_ffmpeg
