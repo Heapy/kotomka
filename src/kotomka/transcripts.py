@@ -103,6 +103,8 @@ def _chapter_windows(chapters: list[Chapter], duration: float, min_seconds: int)
         merged[-2][2] = merged[-1][2]
         merged.pop()
     merged[0][1] = 0.0
+    for current, following in zip(merged, merged[1:]):
+        current[2] = max(current[2], following[1])
     if duration > 0:
         merged[-1][2] = max(merged[-1][2], duration)
     return [(title, start, end) for title, start, end in merged]

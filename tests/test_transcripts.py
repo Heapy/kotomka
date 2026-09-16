@@ -95,3 +95,20 @@ def test_chunk_transcript_assigns_tail_segments_to_last_chunk() -> None:
     chunks = chunk_transcript(transcript, [], target_seconds=300, duration_s=600)
     assert chunks[-1].segments[-1].text == "at 600"
     assert sum(len(chunk.segments) for chunk in chunks) == len(segments)
+
+
+def test_chapter_gaps_stay_with_the_preceding_chapter() -> None:
+    chapters = [
+        Chapter(title="A", start_s=0, end_s=200),
+        Chapter(title="B", start_s=300, end_s=500),
+        Chapter(title="C", start_s=600, end_s=900),
+    ]
+    transcript = Transcript(duration_s=900, segments=[
+        TranscriptSegment(start_s=ts, end_s=ts + 5, text=f"at {ts}") for ts in [50, 250, 350, 550, 650]
+    ])
+    chunks = chunk_transcript(transcript, chapters)
+    assert [(chunk.title, [segment.start_s for segment in chunk.segments]) for chunk in chunks] == [
+        ("A", [50, 250]), ("B", [350, 550]), ("C", [650]),
+    ]
+    assert sum(len(chunk.segments) for chunk in chunks) == len(transcript.segments)
+    assert all(chunk.start_s <= segment.start_s < chunk.end_s for chunk in chunks for segment in chunk.segments)

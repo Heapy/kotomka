@@ -33,6 +33,9 @@ Main flow:
    (`transcript.json` keeps raw labels and word-level data; the report copy drops words).
    Individual notes-request failures are tolerated, but if all fail, the job
    fails before final synthesis instead of generating an ungrounded report.
+   Gaps in chapter metadata extend the preceding chapter's context window,
+   so intervening speech stays in chronological order rather than moving to the
+   final chunk.
 7. `normalize_report` deterministically snaps citation timestamps to transcript
    segments, clamps out-of-range values, and drops unknown frame references.
    Video duration defines the bounds (transcript duration is only a fallback),
