@@ -93,6 +93,20 @@ def test_blur_fallback_can_share_a_timestamp_with_a_rejected_plateau(tmp_path):
 
 
 @needs_ffmpeg
+def test_analysis_and_extraction_use_the_same_video_stream(tmp_path):
+    video = tmp_path / "multiple-streams.mkv"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "color=white:size=160x120:rate=2:duration=4", "-f", "lavfi", "-i",
+                    "color=red:size=320x240:rate=2:duration=4", "-map", "0:v", "-map", "1:v",
+                    "-c:v", "libx264", "-disposition:v:0", "0", "-disposition:v:1", "default", str(video)], check=True)
+    frames = extract_candidate_frames(video, tmp_path / "frames", duration_s=4)
+    assert frames
+    with Image.open(frames[0].path) as image:
+        assert image.size == (160, 120)
+        assert min(image.getpixel((0, 0))) > 240
+
+
+@needs_ffmpeg
 def test_plateau_detection_preserves_a_changed_digit_before_deduplication(tmp_path):
     font = ImageFont.load_default(size=28)
     for index, number in enumerate([1, 9]):

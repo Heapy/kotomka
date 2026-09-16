@@ -252,7 +252,7 @@ def _extract_frames_at(video_path: Path, frames_dir: Path, candidates: list[Cand
     expression = f"if(isnan(prev_selected_t),gte(t,{times[0]:.6f}),gt({crossed},0))"
     result = run_command([
         "ffmpeg", "-y", "-hide_banner", "-nostats", "-loglevel", "info", "-i", str(video_path),
-        "-vf", f"setpts=PTS-STARTPTS,select='{expression}',showinfo", "-an", "-fps_mode", "vfr",
+        "-map", "0:v:0", "-vf", f"setpts=PTS-STARTPTS,select='{expression}',showinfo", "-an", "-fps_mode", "vfr",
         str(frames_dir / "candidate_%05d.png"),
     ])
     frames: list[CandidateFrame] = []
