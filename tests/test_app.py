@@ -126,6 +126,27 @@ class StubWorker:
         self.enqueued.append(job_id)
 
 
+def test_delete_route_handles_a_concurrent_retry(tmp_path, monkeypatch) -> None:
+    test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = test_store.create_job(JobCreate(source_url="https://example.com/video"))
+    test_store.update_job(job.id, status="completed")
+    delete = test_store.delete_job
+
+    def retry_then_delete(job_id):
+        test_store.retry_job(job_id)
+        return delete(job_id)
+
+    monkeypatch.setattr(test_store, "delete_job", retry_then_delete)
+    monkeypatch.setattr(app_module, "store", test_store)
+    monkeypatch.setattr(app_module, "worker", StubWorker())
+    with TestClient(app_module.app) as client:
+        response = client.post(f"/jobs/{job.id}/delete", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"].endswith(f"/jobs/{job.id}")
+    assert test_store.get_job(job.id).status == "queued"
+
+
 def test_create_job_form_accepts_speakers_expected(tmp_path, monkeypatch) -> None:
     test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
     stub_worker = StubWorker()

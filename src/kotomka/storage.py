@@ -181,8 +181,12 @@ class JobStore:
         if current.status not in {"completed", "failed"}:
             raise ValueError("Only completed or failed jobs can be deleted")
         with self._lock, self._connect() as conn:
-            conn.execute("DELETE FROM jobs WHERE id = ?", (current.id,))
+            cursor = conn.execute(
+                "DELETE FROM jobs WHERE id = ? AND status IN ('completed', 'failed')", (current.id,)
+            )
             conn.commit()
+            if cursor.rowcount == 0:
+                raise ValueError("Job is no longer terminal or has already been deleted")
         if artifact_dir.exists() and artifact_dir != jobs_dir and jobs_dir in artifact_dir.parents:
             shutil.rmtree(artifact_dir)
         return current

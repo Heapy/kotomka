@@ -60,11 +60,16 @@ class JobWorker:
                 continue
             try:
                 self.process(job_id)
+            except Exception:
+                traceback.print_exc()
             finally:
                 self._queue.task_done()
 
     def process(self, job_id: str) -> None:
-        job = self.store.get_job(job_id)
+        try:
+            job = self.store.get_job(job_id)
+        except KeyError:
+            return
         try:
             self.store.update_job(job_id, status="running", progress=5, message="Downloading video")
             with self._download_semaphore:

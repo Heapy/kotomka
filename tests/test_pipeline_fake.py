@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -176,5 +177,32 @@ def test_worker_restarts_after_stop(tmp_path: Path) -> None:
     worker.start()
     try:
         assert all(thread.is_alive() for thread in worker._threads)
+    finally:
+        worker.stop()
+
+
+def test_worker_skips_a_deleted_queue_entry(tmp_path: Path, monkeypatch) -> None:
+    _, worker = make_worker(tmp_path)
+    monkeypatch.setattr(worker.source_provider, "fetch", lambda *args: pytest.fail("Deleted job was processed"))
+    worker.process("already-deleted")
+
+
+def test_worker_continues_after_an_unexpected_job_exception(tmp_path: Path, monkeypatch) -> None:
+    _, worker = make_worker(tmp_path)
+    worker.settings.worker_pool_size = 1
+    processed = Event()
+
+    def process(job_id):
+        if job_id == "broken":
+            raise RuntimeError("unexpected storage failure")
+        processed.set()
+
+    monkeypatch.setattr(worker, "process", process)
+    worker.enqueue("broken")
+    worker.enqueue("next")
+    worker.start()
+    try:
+        assert processed.wait(timeout=2), "The worker stopped before the next queued job"
+        assert worker._threads[0].is_alive()
     finally:
         worker.stop()

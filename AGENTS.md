@@ -70,7 +70,10 @@ Generated data is intentionally local and ignored by git:
 - Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `notes.json` (map-reduce runs only), `report.json`, `report.pdf`
 
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
-Active jobs are not deletable from the UI to avoid racing the worker.
+Deletion is conditional on terminal status in the same SQL statement, so a
+concurrent retry cannot have its queued job or artifacts removed. Workers skip
+queue entries whose records no longer exist; unexpected job exceptions are
+logged without terminating the worker thread.
 
 Jobs also have an `is_read` state stored in SQLite. New and retried jobs are
 unread by default. `/jobs` hides read jobs unless `show_read=1` is present, and

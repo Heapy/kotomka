@@ -33,6 +33,28 @@ def test_delete_job_rejects_active_jobs(tmp_path: Path) -> None:
     assert store.get_job(job.id).status == "queued"
 
 
+def test_delete_does_not_remove_a_job_retried_after_its_status_read(tmp_path: Path, monkeypatch) -> None:
+    store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    concurrent_store = JobStore(store.db_path, store.jobs_dir)
+    job = store.create_job(JobCreate(source_url="https://example.com/video"))
+    store.update_job(job.id, status="completed")
+    marker = job.artifact_dir / "marker.txt"
+    marker.write_text("keep", encoding="utf-8")
+    get_job = store.get_job
+
+    def read_then_retry(job_id):
+        snapshot = get_job(job_id)
+        concurrent_store.retry_job(job_id)
+        return snapshot
+
+    monkeypatch.setattr(store, "get_job", read_then_retry)
+    with pytest.raises(ValueError):
+        store.delete_job(job.id)
+
+    assert concurrent_store.get_job(job.id).status == "queued"
+    assert marker.read_text(encoding="utf-8") == "keep"
+
+
 def test_read_jobs_are_hidden_from_default_list(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
     unread = store.create_job(JobCreate(source_url="https://example.com/unread"))

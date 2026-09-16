@@ -170,7 +170,12 @@ def delete_job(request: Request, job_id: str, show_read: bool = Form(False)) -> 
     job = _get_job_or_404(job_id)
     if job.status not in {"completed", "failed"}:
         return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
-    store.delete_job(job_id)
+    try:
+        store.delete_job(job_id)
+    except ValueError:
+        return RedirectResponse(str(request.url_for("job_report", job_id=job_id)), status_code=303)
+    except KeyError:
+        pass  # A concurrent delete already removed the job.
     target = str(request.url_for("jobs_index"))
     if show_read:
         target = f"{target}?{urlencode({'show_read': '1'})}"
