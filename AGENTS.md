@@ -174,6 +174,8 @@ One ffmpeg analysis pass splits the decoded video into scene detection and a
 stream of 1 fps grayscale thumbnails. Thumbnails are hashed in memory and never
 written as PNGs. Candidate timestamps are budgeted before a second sequential
 ffmpeg pass extracts full-resolution images; no per-candidate seeks are needed.
+The timestamp selection expression uses a balanced sum, keeping its tree depth
+logarithmic and below ffmpeg's expression limit for large candidate budgets.
 Several targets mapping to one VFR frame share that image and use its actual PTS.
 Both passes explicitly use the first video stream, even when a different stream
 is marked as default, so analysis timestamps and extracted images cannot diverge.

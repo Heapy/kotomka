@@ -57,6 +57,31 @@ def test_extraction_uses_two_passes_without_thumbnail_files(tmp_path, monkeypatc
 
 
 @needs_ffmpeg
+@pytest.mark.parametrize("count", [150, 151, 512])
+def test_batch_extraction_handles_large_candidate_budgets(tmp_path, count):
+    video = tmp_path / "motion.mkv"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    f"testsrc=size=64x48:rate=10:duration={count / 5 + 1}",
+                    "-c:v", "ffv1", str(video)], check=True)
+    frames_dir = tmp_path / "frames"
+    frames_dir.mkdir()
+    candidates = [
+        CandidateFrame(frame_id=str(index), timestamp_s=index / 5 + 0.01,
+                       path=frames_dir / "pending.png", source="periodic")
+        for index in range(count)
+    ]
+
+    frames = _extract_frames_at(video, frames_dir, candidates)
+
+    assert [frame.frame_id for frame in frames] == [frame.frame_id for frame in candidates]
+    assert [frame.timestamp_s for frame in frames] == pytest.approx(
+        [index / 5 + 0.1 for index in range(count)]
+    )
+    assert len(list(frames_dir.glob("*.png"))) == count
+    assert all(frame.path.is_file() for frame in frames)
+
+
+@needs_ffmpeg
 def test_batch_extraction_maps_close_targets_to_actual_vfr_timestamps(tmp_path):
     from kotomka.media import _analyze_video
     for index, color in enumerate(["white", "black", "white"]):

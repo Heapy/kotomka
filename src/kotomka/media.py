@@ -248,8 +248,12 @@ def _extract_frames_at(video_path: Path, frames_dir: Path, candidates: list[Cand
         return []
     ordered = sorted(candidates, key=lambda frame: frame.timestamp_s)
     times = sorted({max(0, frame.timestamp_s) for frame in ordered})
-    crossed = "+".join(f"gte(t,{value:.6f})*lt(prev_selected_t,{value:.6f})" for value in times)
-    expression = f"if(isnan(prev_selected_t),gte(t,{times[0]:.6f}),gt({crossed},0))"
+    crossings = [f"gte(t,{value:.6f})*lt(prev_selected_t,{value:.6f})" for value in times]
+    # A flat sum creates a linear-depth AST that exceeds ffmpeg's expression
+    # depth limit at the default 150 candidates. Pair terms into a balanced tree.
+    while len(crossings) > 1:
+        crossings = [f"({'+'.join(crossings[start:start + 2])})" for start in range(0, len(crossings), 2)]
+    expression = f"if(isnan(prev_selected_t),gte(t,{times[0]:.6f}),gt({crossings[0]},0))"
     result = run_command([
         "ffmpeg", "-y", "-hide_banner", "-nostats", "-loglevel", "info", "-i", str(video_path),
         "-map", "0:v:0", "-vf", f"setpts=PTS-STARTPTS,select='{expression}',showinfo", "-an", "-fps_mode", "vfr",
