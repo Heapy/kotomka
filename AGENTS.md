@@ -54,6 +54,8 @@ Main flow:
    The Codex transport has no tools support and silently ignores the flag.
    Assessment failures never fail the job.
 9. FastAPI renders status, report, filtered job list, assets, retry/reprocess/delete, read-state, and PDF endpoints.
+   A polled transition to failed reloads the status page once to expose recovery
+   actions; an already-failed page stops polling without a reload loop.
 
 Important modules:
 

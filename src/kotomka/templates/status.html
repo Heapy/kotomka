@@ -45,13 +45,17 @@
     const response = await fetch(`/api/jobs/${jobId}`);
     if (!response.ok) return;
     const job = await response.json();
+    const previousStatus = statusEl.textContent.trim();
     statusEl.textContent = job.status;
     statusEl.className = `status-pill status-${job.status}`;
     messageEl.textContent = job.message;
     progressEl.style.width = `${job.progress}%`;
     errorEl.textContent = job.error || "";
     if (job.status === "completed") window.location.reload();
-    if (job.status === "failed") clearInterval(timer);
+    if (job.status === "failed") {
+      clearInterval(timer);
+      if (previousStatus !== "failed") window.location.reload();
+    }
   }
   const timer = setInterval(pollJob, 1500);
 </script>
