@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from kotomka.config import get_settings
 from kotomka.models import (
     CandidateFrame,
@@ -253,6 +255,27 @@ def test_build_report_tolerates_failed_notes_chunk(tmp_path: Path, monkeypatch) 
     saved_notes = json.loads((tmp_path / "notes.json").read_text(encoding="utf-8"))
     assert len(saved_notes) == 3
     assert saved_notes[0]["chunk_summary"] == ""
+
+
+def test_build_report_stops_when_all_notes_requests_fail(tmp_path: Path, monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "report_single_pass_max_chars", 10)
+    monkeypatch.setattr(settings, "report_chunk_target_seconds", 100)
+
+    class FailedNotes(StubJsonLlm):
+        def _request_json(self, **kwargs):
+            self.calls.append(kwargs)
+            if kwargs["schema_name"] == "chunk_notes":
+                raise RuntimeError("provider unavailable")
+            return {"summary": "Ungrounded report", "sections": []}
+
+    stub = FailedNotes([])
+    with pytest.raises(RuntimeError, match="All transcript chunk notes failed"):
+        stub.build_report(
+            source=make_source(), transcript=make_transcript(), frames=[], output_language="ru", work_dir=tmp_path,
+        )
+    assert len(stub.calls) == 3
+    assert all(call["schema_name"] == "chunk_notes" for call in stub.calls)
 
 
 ASSESSMENT_PAYLOAD = {

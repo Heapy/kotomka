@@ -31,6 +31,8 @@ Main flow:
    together with the selected frame images. The report pass can map diarization
    labels to real speaker names, applied to the report's embedded transcript copy
    (`transcript.json` keeps raw labels and word-level data; the report copy drops words).
+   Individual notes-request failures are tolerated, but if all fail, the job
+   fails before final synthesis instead of generating an ungrounded report.
 7. `normalize_report` deterministically snaps citation timestamps to transcript
    segments, clamps out-of-range values, and drops unknown frame references.
 8. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the
