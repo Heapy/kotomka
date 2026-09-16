@@ -9,7 +9,9 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+from .artifacts import FrameCleanup, prune_frame_files
 from .models import JobCreate, JobRecord, JobStatus
+from .reporting import load_report
 
 
 class JobStore:
@@ -173,6 +175,23 @@ class JobStore:
             )
             conn.commit()
         return self.get_job(job_id)
+
+    def completed_job_ids(self) -> list[str]:
+        with self._lock, self._connect() as conn:
+            return [row["id"] for row in conn.execute("SELECT id FROM jobs WHERE status = 'completed'")]
+
+    def cleanup_frames(self, job_id: str, *, dry_run: bool = False) -> FrameCleanup | None:
+        # A database write lock also excludes retries in another server process.
+        with self._lock, self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT status, artifact_dir FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            if row is None or row["status"] != "completed":
+                return None
+            artifact_dir = Path(row["artifact_dir"])
+            if artifact_dir.is_symlink() or artifact_dir.resolve().parent != self.jobs_dir.resolve():
+                raise ValueError("Job artifacts must be inside the jobs directory")
+            report = load_report(artifact_dir / "report.json")
+            return prune_frame_files(artifact_dir, report, dry_run=dry_run)
 
     def delete_job(self, job_id: str) -> JobRecord:
         current = self.get_job(job_id)

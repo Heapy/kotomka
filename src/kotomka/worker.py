@@ -164,6 +164,11 @@ class JobWorker:
                 error=None,
                 result={"report_path": str(report_path)},
             )
+            try:
+                self.store.cleanup_frames(job_id)
+            except (OSError, ValueError):
+                # Cleanup is best-effort; a usable completed report stays usable.
+                traceback.print_exc()
         except Exception as exc:
             traceback.print_exc()
             self.store.update_job(job_id, status="failed", progress=100, message="Failed", error=str(exc))

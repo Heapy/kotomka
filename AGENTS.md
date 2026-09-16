@@ -80,6 +80,14 @@ Generated data is intentionally local and ignored by git:
 - Frame candidates: `frames/*.png`
 - Structured artifacts: `transcript.json`, `transcript_raw.json`, `frames.json`, `selected_frames.json`, `notes.json` (map-reduce runs only), `report.json`, `report.pdf`
 
+After a report is saved and the job completes, unused PNG candidates are removed;
+every image referenced by `report.frames` is retained, including images not used
+in a section. `frames.json` remains a diagnostic manifest and can reference pruned
+candidates. Cleanup validates all retained images before deleting anything and
+holds a SQLite write transaction to exclude concurrent retries. Invalid/incomplete
+reports are skipped. Existing completed jobs can be cleaned with
+`uv run kotomka cleanup-frames` (`--dry-run` previews counts and bytes).
+
 Deleting a terminal job removes both its SQLite record and `data/jobs/{job_id}`.
 Deletion is conditional on terminal status in the same SQL statement, so a
 concurrent retry cannot have its queued job or artifacts removed. Workers skip

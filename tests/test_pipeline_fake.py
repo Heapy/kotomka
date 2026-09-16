@@ -85,6 +85,9 @@ def test_pipeline_fake_end_to_end(tmp_path: Path) -> None:
     assert (completed.artifact_dir / "frames.json").exists()
     assert (completed.artifact_dir / "media" / "audio.flac").exists()
     assert (completed.artifact_dir / "transcript_raw.json").exists()
+    assert {p.name for p in (completed.artifact_dir / "frames").glob("*.png")} == {
+        frame.image_path for frame in report.frames
+    }
 
 
 @needs_ffmpeg
