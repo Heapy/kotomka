@@ -10,6 +10,7 @@ import pytest
 from kotomka.config import get_settings
 from kotomka.models import (
     CandidateFrame,
+    Chapter,
     FrameSelection,
     SourceArtifact,
     Transcript,
@@ -157,8 +158,21 @@ def test_build_report_caps_images_and_skips_missing_files(tmp_path: Path) -> Non
     )
 
     images = stub.calls[0]["images"]
-    assert len(images) == 15  # 16 cap minus one missing file
+    assert len(images) == 16
     assert all(image.path.exists() for image in images)
+    assert images[0].path.name == "frame-00.png"
+    assert images[-1].path.name == "frame-19.png"
+
+
+def test_report_image_budget_reserves_short_chapter_and_late_content(tmp_path):
+    from kotomka.providers.llm.json_base import report_images
+    selections = make_selection_files(tmp_path, 5)
+    for selection, timestamp in zip(selections, [0, 5, 100, 200, 300]):
+        selection.timestamp_s = timestamp
+    chapters = [Chapter(title="Brief demo", start_s=5, end_s=6)]
+    images = report_images(selections, tmp_path, max_images=3, chapters=chapters)
+    assert len(images) == 3
+    assert {image.path.name for image in images} >= {selections[1].image_path, selections[-1].image_path}
 
 
 def test_build_report_without_work_dir_sends_no_images() -> None:

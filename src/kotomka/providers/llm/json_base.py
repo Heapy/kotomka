@@ -11,9 +11,11 @@ from pydantic import ValidationError
 from datetime import date
 
 from ...config import Settings, get_settings
+from ...frame_selection import sample_timeline
 from ...models import (
     AssessmentFlag,
     CandidateFrame,
+    Chapter,
     FrameSelection,
     Report,
     ReportAssessment,
@@ -130,7 +132,7 @@ class JsonLlmProviderBase(LlmProvider):
         payload = self._request_json(
             instructions=REPORT_INSTRUCTIONS,
             text=json.dumps(context, ensure_ascii=False, default=str) + "\n\n" + knowledge,
-            images=report_images(frames, work_dir, max_images=settings.report_max_images),
+            images=report_images(frames, work_dir, max_images=settings.report_max_images, chapters=source.metadata.chapters),
             image_detail=settings.report_image_detail,
             schema_name="video_report",
             schema=REPORT_SCHEMA,
@@ -314,15 +316,19 @@ def selection_label(selection: FrameSelection) -> str:
     return f"frame_id={selection.frame_id} timestamp_s={selection.timestamp_s}"
 
 
-def report_images(frames: list[FrameSelection], work_dir: Path | None, *, max_images: int) -> list[ImageInput]:
+def report_images(
+    frames: list[FrameSelection], work_dir: Path | None, *, max_images: int, chapters: list[Chapter] | None = None,
+) -> list[ImageInput]:
     if work_dir is None or max_images <= 0:
         return []
-    images: list[ImageInput] = []
-    for selection in frames[:max_images]:
-        path = work_dir / "frames" / selection.image_path
-        if path.exists():
-            images.append(ImageInput(path=path, label=selection_label(selection)))
-    return images
+    available = [frame for frame in frames if (work_dir / "frames" / frame.image_path).is_file()]
+    reserved = []
+    for chapter in chapters or []:
+        candidates = [frame for frame in available if chapter.start_s <= frame.timestamp_s < chapter.end_s]
+        if candidates:
+            reserved.append(max(candidates, key=lambda frame: frame.score))
+    selected = sample_timeline(available, max_images, reserved=reserved)
+    return [ImageInput(path=work_dir / "frames" / frame.image_path, label=selection_label(frame)) for frame in selected]
 
 
 def metadata_summary(metadata: VideoMetadata) -> dict[str, Any]:

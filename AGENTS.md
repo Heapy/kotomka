@@ -242,6 +242,12 @@ After selection, an optional re-caption pass (`KOTOMKA_RECAPTION_SELECTED_FRAMES
 default on) sends only the winners at high image detail to refresh captions and
 `ocr_text`; failures fall back to the scoring-pass captions.
 
+The final report's image budget (`KOTOMKA_REPORT_MAX_IMAGES`, default 16) also
+spans the timeline instead of truncating to the earliest frames. Available
+chapter representatives are reserved by score, remaining slots fill time gaps,
+and missing files do not consume the budget. All selected captions/OCR remain
+in the report's text context even when an image is outside this visual budget.
+
 ## PDF
 
 ReportLab is the default PDF renderer because launching system Chrome from Codex/macOS sandbox can crash Chrome.
