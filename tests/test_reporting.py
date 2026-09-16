@@ -67,18 +67,18 @@ def test_unknown_frame_ids_are_dropped() -> None:
 
 def test_inline_citations_snap_in_summary_and_body() -> None:
     report = make_report(
-        summary="Discussed at [44.8].",
-        sections=[make_section(body="See [44.8, 121] for details.")],
+        summary="Discussed at [t=44.8].",
+        sections=[make_section(body="See [t=44.8, 121] for details.")],
     )
     normalized = normalize_report(report, tolerance_s=5.0)
-    assert normalized.summary == "Discussed at [45]."
-    assert normalized.sections[0].body == "See [45, 120] for details."
+    assert normalized.summary == "Discussed at [t=45]."
+    assert normalized.sections[0].body == "See [t=45, 120] for details."
 
 
 def test_inline_over_duration_value_is_clamped() -> None:
-    report = make_report(sections=[make_section(body="Wrap-up at [999].")])
+    report = make_report(sections=[make_section(body="Wrap-up at [t=999].")])
     normalized = normalize_report(report, tolerance_s=5.0)
-    assert normalized.sections[0].body == "Wrap-up at [180]."
+    assert normalized.sections[0].body == "Wrap-up at [t=180]."
 
 
 def test_inline_prose_numbers_survive() -> None:
@@ -88,19 +88,30 @@ def test_inline_prose_numbers_survive() -> None:
     assert normalized.sections[0].body == body
 
 
+def test_bracketed_metrics_are_never_inferred_to_be_timestamps() -> None:
+    body = "Pool sizes [16, 32, 64], maximum [999], code `lookup[t=44.8]`."
+    report = make_report(summary=body, sections=[make_section(body=body, citations=[16, 32, 64])])
+    report.transcript.segments = [
+        TranscriptSegment(start_s=start, end_s=start + 1, text="text") for start in [15, 30, 65]
+    ]
+    normalized = normalize_report(report)
+    assert normalized.summary == body
+    assert normalized.sections[0].body == body
+
+
 def test_inline_code_blocks_are_untouched() -> None:
-    body = "Snap [44.8] here.\n```python\nitems = data[44]\n```\nAnd [44.8] here."
+    body = "Snap [t=44.8] here.\n```python\nitems = data[44]\n```\nAnd [t=44.8] here."
     report = make_report(sections=[make_section(body=body)])
     normalized = normalize_report(report, tolerance_s=5.0)
     assert "items = data[44]" in normalized.sections[0].body
-    assert normalized.sections[0].body.startswith("Snap [45] here.")
-    assert normalized.sections[0].body.endswith("And [45] here.")
+    assert normalized.sections[0].body.startswith("Snap [t=45] here.")
+    assert normalized.sections[0].body.endswith("And [t=45] here.")
 
 
 def test_normalize_is_idempotent() -> None:
     report = make_report(
-        summary="Discussed at [44.8].",
-        sections=[make_section(body="See [44.8, 121].", citations=[44.0], frame_ids=["f1"])],
+        summary="Discussed at [t=44.8].",
+        sections=[make_section(body="See [t=44.8, 121].", citations=[44.0], frame_ids=["f1"])],
     )
     once = normalize_report(report, tolerance_s=5.0)
     twice = normalize_report(once, tolerance_s=5.0)
@@ -137,7 +148,7 @@ def test_silent_video_tail_keeps_its_section_and_citations() -> None:
 
 
 def test_video_bounds_win_over_stt_timestamps_beyond_the_media() -> None:
-    report = make_report(sections=[make_section(end_s=200, citations=[123], body="End [123].")])
+    report = make_report(sections=[make_section(end_s=200, citations=[123], body="End [t=123].")])
     report.video.duration_s = 120
     report.transcript = Transcript(
         duration_s=125, segments=[TranscriptSegment(start_s=121, end_s=125, text="Late STT estimate")],
@@ -145,4 +156,4 @@ def test_video_bounds_win_over_stt_timestamps_beyond_the_media() -> None:
     result = normalize_report(report)
     assert result.sections[0].end_s == 120
     assert result.sections[0].citations == [120]
-    assert result.sections[0].body == "End [120]."
+    assert result.sections[0].body == "End [t=120]."

@@ -81,6 +81,11 @@
           <a class="time-link" href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, section.start_s) }}">{{ section.start_s | timecode }}</a>
         </div>
         <p>{{ citation_links(section.body, report.video.webpage_url or report.video.source_url) }}</p>
+        {% if section.citations %}
+          <p class="meta">{% for seconds in section.citations %}
+            <a class="time-link" href="{{ timestamp_url(report.video.webpage_url or report.video.source_url, seconds) }}">{{ seconds | timecode }}</a>
+          {% endfor %}</p>
+        {% endif %}
         {% set frame_ids = section.frame_ids %}
         {% if frame_ids %}
           <div class="frame-row">

@@ -91,7 +91,9 @@ template), each section covering roughly 2-6 minutes. For every section provide:
   speech) as fenced code blocks. Quote memorable phrasing sparingly. Where the
   transcript is marked [low-confidence], hedge explicitly instead of asserting.
 - citations: timestamps in seconds for the important claims; also embed each
-  citation inline in the body as [123.4] right after the claim it supports.
+  citation inline in the body as [t=123.4] right after the claim it supports.
+  Use this explicit [t=seconds] format in the summary too; plain numeric brackets
+  are content, never citation markup. Do not place citation markup inside code.
 - frame_ids: the provided frames whose content belongs to this section.
 
 speaker_names: map diarization labels such as "Speaker A" to real names whenever

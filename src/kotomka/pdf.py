@@ -9,6 +9,7 @@ from xml.sax.saxutils import escape
 from fastapi import Request
 
 from .models import Report
+from .reporting import substitute_citations
 from .utils import format_timecode
 
 
@@ -165,7 +166,7 @@ def _write_reportlab_pdf(report: Report, output_path: Path) -> None:
     )
     story.append(Spacer(1, 7 * mm))
     story.append(Paragraph("Summary", styles["KotomkaH2"]))
-    story.append(Paragraph(_p(report.summary), styles["KotomkaBody"]))
+    story.append(Paragraph(_report_text(report.summary), styles["KotomkaBody"]))
     story.append(Spacer(1, 6 * mm))
 
     if report.assessment:
@@ -198,7 +199,7 @@ def _write_reportlab_pdf(report: Report, output_path: Path) -> None:
     story.append(Paragraph("Detailed Notes", styles["KotomkaH2"]))
     for section in report.sections:
         story.append(Paragraph(_p(f"{section.title} · {format_timecode(section.start_s)}"), styles["KotomkaH3"]))
-        story.append(Paragraph(_p(section.body), styles["KotomkaBody"]))
+        story.append(Paragraph(_report_text(section.body), styles["KotomkaBody"]))
         for frame_id in section.frame_ids[:2]:
             frame = frames_by_id.get(frame_id)
             if frame:
@@ -261,6 +262,12 @@ def _append_frame(story, frame, job_dir: Path, target_width, PILImage, Image, Pa
         caption,
         Spacer(1, 12),
     ]))
+
+
+def _report_text(text: str) -> str:
+    return _p(substitute_citations(
+        text, lambda match: "[" + ", ".join(format_timecode(float(value)) for value in match.group(1).split(",")) + "]",
+    ))
 
 
 def _p(text: str) -> str:

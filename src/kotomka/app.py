@@ -16,7 +16,7 @@ from .models import JobCreate
 from .pdf import render_pdf, should_regenerate_pdf
 from .providers.llm import available_llm_providers
 from .providers.stt import available_stt_providers
-from .reporting import CITATION_PATTERN, load_report
+from .reporting import load_report, substitute_citations
 from .source import SUPPORTED_COOKIE_BROWSERS
 from .storage import JobStore
 from .utils import format_timecode, read_json
@@ -253,7 +253,7 @@ def _citation_links(text: str, url: str | None) -> Markup:
             links.append(f'<a class="time-link" href="{href}">{label}</a>')
         return "[" + ", ".join(links) + "]"
 
-    return Markup(CITATION_PATTERN.sub(replace, str(escaped)))
+    return Markup(substitute_citations(str(escaped), replace))
 
 
 def _job_display_title(job) -> str:

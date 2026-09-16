@@ -1,14 +1,26 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 from .models import Report, ReportSection
 from .utils import read_json, write_json
 
-CITATION_PATTERN = re.compile(r"\[((?:\d+(?:\.\d+)?\s*,\s*)*\d+(?:\.\d+)?)\]")
+CITATION_PATTERN = re.compile(r"\[t=((?:\d+(?:\.\d+)?\s*,\s*)*\d+(?:\.\d+)?)\]")
+CODE_PATTERN = re.compile(r"(`{3,}|~{3,})[\s\S]*?(?:\1|$)|(`+)[\s\S]*?\2")
 
-CODE_FENCE = "```"
+
+def substitute_citations(text: str, replace: Callable[[re.Match[str]], str]) -> str:
+    """Transform explicit timestamp markup only outside fenced and inline code."""
+    result: list[str] = []
+    end = 0
+    for code in CODE_PATTERN.finditer(text):
+        result.append(CITATION_PATTERN.sub(replace, text[end:code.start()]))
+        result.append(code.group())
+        end = code.end()
+    result.append(CITATION_PATTERN.sub(replace, text[end:]))
+    return "".join(result)
 
 
 def save_report(report: Report, path: Path) -> None:
@@ -24,9 +36,8 @@ def normalize_report(report: Report, *, tolerance_s: float = 5.0) -> Report:
 
     Citations are snapped to nearby transcript segment starts, values beyond the video
     duration are clamped, section bounds are ordered and clamped, and frame references
-    that do not exist in the report are dropped. Inline ``[12.3]`` groups in prose are
-    rewritten only when every value in the group is clearly a timestamp, so bracketed
-    numbers that are part of regular text or code survive untouched.
+    that do not exist in the report are dropped. Only explicit ``[t=12.3]`` groups
+    in prose are rewritten; ordinary bracketed numbers and code stay untouched.
     """
     duration = report.video.duration_s or report.transcript.duration_s
     starts = sorted({
@@ -70,15 +81,7 @@ def normalize_report(report: Report, *, tolerance_s: float = 5.0) -> Report:
 
 
 def _normalize_inline_citations(text: str, starts: list[float], tolerance_s: float, duration: float) -> str:
-    if not text:
-        return text
-    chunks = text.split(CODE_FENCE)
-    for index in range(0, len(chunks), 2):
-        chunks[index] = CITATION_PATTERN.sub(
-            lambda match: _rewrite_citation_group(match, starts, tolerance_s, duration),
-            chunks[index],
-        )
-    return CODE_FENCE.join(chunks)
+    return substitute_citations(text, lambda match: _rewrite_citation_group(match, starts, tolerance_s, duration))
 
 
 def _rewrite_citation_group(match: re.Match[str], starts: list[float], tolerance_s: float, duration: float) -> str:
@@ -86,18 +89,11 @@ def _rewrite_citation_group(match: re.Match[str], starts: list[float], tolerance
     for raw in match.group(1).split(","):
         value = float(raw.strip())
         nearest = min(starts, key=lambda start: abs(start - value), default=None)
-        if value > duration:
-            rewritten.append(nearest if nearest is not None and abs(nearest - value) <= tolerance_s else duration)
-        elif nearest is not None and abs(nearest - value) <= 1e-6:
-            rewritten.append(nearest)
-        elif nearest is not None and abs(nearest - value) <= tolerance_s and value > tolerance_s:
-            # Snapping tiny values would rewrite prose like "array [1, 2]" into [0];
-            # values at or below the tolerance are left for the human eye instead.
-            rewritten.append(nearest)
-        else:
-            return match.group(0)
+        if nearest is not None and abs(nearest - value) <= tolerance_s:
+            value = nearest
+        rewritten.append(min(max(value, 0.0), duration))
     deduped = list(dict.fromkeys(rewritten))
-    return "[" + ", ".join(_format_seconds(value) for value in deduped) + "]"
+    return "[t=" + ", ".join(_format_seconds(value) for value in deduped) + "]"
 
 
 def _format_seconds(value: float) -> str:

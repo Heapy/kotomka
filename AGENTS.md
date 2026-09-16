@@ -42,6 +42,9 @@ Main flow:
    segments, clamps out-of-range values, and drops unknown frame references.
    Video duration defines the bounds (transcript duration is only a fallback),
    preserving silent visual content after the last speech segment.
+   Inline citations use explicit `[t=123.4]` markup outside code. Plain numeric
+   brackets are never inferred as timestamps or rewritten, including in old
+   reports. Structured section citations remain clickable for legacy reports.
 8. An assessment pass (`KOTOMKA_ASSESSMENT_ENABLED`, default on) critiques the
    finished report: originality, freshness anchored to the upload date (with
    stale-claim flags), audience, actionability, insight density, and a verdict.
