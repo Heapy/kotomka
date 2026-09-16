@@ -6,7 +6,15 @@ from kotomka.models import (
     TranscriptSegment,
     VideoMetadata,
 )
-from kotomka.reporting import normalize_report
+from kotomka.reporting import _nearest_start, normalize_report
+
+
+def test_nearest_start_keeps_lower_tie_and_boundary_behavior():
+    assert _nearest_start([], 10) is None
+    assert _nearest_start([15, 30, 65], -1) == 15
+    assert _nearest_start([15, 30, 65], 22.5) == 15
+    assert _nearest_start([15, 30, 65], 65) == 65
+    assert _nearest_start([15, 30, 65], 100) == 65
 
 
 def make_report(*, summary: str = "", sections: list[ReportSection] | None = None) -> Report:

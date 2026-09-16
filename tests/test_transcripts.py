@@ -130,3 +130,26 @@ def test_chapter_gaps_stay_with_the_preceding_chapter() -> None:
     ]
     assert sum(len(chunk.segments) for chunk in chunks) == len(transcript.segments)
     assert all(chunk.start_s <= segment.start_s < chunk.end_s for chunk in chunks for segment in chunk.segments)
+
+
+def test_binary_lookup_preserves_first_window_precedence_for_overlapping_chapters():
+    transcript = Transcript(duration_s=1000, segments=[
+        TranscriptSegment(start_s=ts, end_s=ts + 1, text=str(ts)) for ts in [50, 150, 600, 700, 1100]
+    ])
+    chapters = [Chapter(title="A", start_s=0, end_s=600), Chapter(title="B", start_s=100, end_s=1000)]
+    chunks = chunk_transcript(transcript, chapters, target_seconds=100, min_seconds=0)
+    assert [(chunk.start_s, [segment.start_s for segment in chunk.segments]) for chunk in chunks] == [
+        (0, [50]), (100, [150]), (600, [600]), (700, [700]), (900, [1100]),
+    ]
+
+
+def test_window_lookup_uses_logarithmic_number_of_boundary_reads():
+    from kotomka.transcripts import _window_index
+    class CountingBounds(list):
+        reads = 0
+        def __getitem__(self, index):
+            self.reads += 1
+            return super().__getitem__(index)
+    boundaries = CountingBounds(range(1, 65537))
+    assert _window_index(boundaries, 32768) == 32768
+    assert boundaries.reads <= 17

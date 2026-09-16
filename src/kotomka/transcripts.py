@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
+from itertools import accumulate
 from typing import NamedTuple
 
 from .models import Chapter, Transcript, TranscriptSegment
@@ -118,8 +120,11 @@ def chunk_transcript(
     chunks = [TranscriptChunk(title=title, start_s=start, end_s=end, segments=[]) for title, start, end in windows]
     if not chunks:
         return []
+    # Prefix maxima preserve first-window precedence even for overlapping chapter
+    # metadata. Windows cover the timeline, including gaps filled above.
+    end_bounds = list(accumulate((end for _, _, end in windows), max))
     for segment in transcript.segments:
-        index = _window_index(windows, segment.start_s)
+        index = _window_index(end_bounds, segment.start_s)
         chunks[index].segments.append(segment)
     return [chunk for chunk in chunks if chunk.segments]
 
@@ -174,11 +179,8 @@ def _split_long_windows(
     return result
 
 
-def _window_index(windows: list[tuple[str | None, float, float]], timestamp: float) -> int:
-    for index, (_, start, end) in enumerate(windows):
-        if start <= timestamp < end:
-            return index
-    return 0 if timestamp < windows[0][1] else len(windows) - 1
+def _window_index(end_bounds: list[float], timestamp: float) -> int:
+    return min(bisect_right(end_bounds, timestamp), len(end_bounds) - 1)
 
 
 def _join_whole_lines(lines: list[str], max_chars: int) -> str:

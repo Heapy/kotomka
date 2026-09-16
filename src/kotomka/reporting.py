@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from bisect import bisect_left
 from collections.abc import Callable
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -10,6 +11,11 @@ from .utils import read_json, write_json
 
 CITATION_PATTERN = re.compile(r"\[t=((?:\d+(?:\.\d+)?\s*,\s*)*\d+(?:\.\d+)?)\]")
 CODE_PATTERN = re.compile(r"(`{3,}|~{3,})[\s\S]*?(?:\1|$)|(`+)[\s\S]*?\2")
+
+
+def _nearest_start(starts: list[float], value: float) -> float | None:
+    index = bisect_left(starts, value)
+    return min(starts[max(0, index - 1):index + 1], key=lambda start: abs(start - value), default=None)
 
 
 def substitute_citations(text: str, replace: Callable[[re.Match[str]], str]) -> str:
@@ -55,7 +61,7 @@ def normalize_report(report: Report, *, tolerance_s: float = 5.0) -> Report:
     known_frame_ids = {frame.frame_id for frame in report.frames}
 
     def snap_value(value: float) -> float:
-        nearest = min(starts, key=lambda start: abs(start - value), default=None)
+        nearest = _nearest_start(starts, value)
         if nearest is not None and abs(nearest - value) <= tolerance_s:
             value = nearest
         return min(max(value, 0.0), duration)
@@ -96,7 +102,7 @@ def _rewrite_citation_group(match: re.Match[str], starts: list[float], tolerance
     rewritten: list[float] = []
     for raw in match.group(1).split(","):
         value = float(raw.strip())
-        nearest = min(starts, key=lambda start: abs(start - value), default=None)
+        nearest = _nearest_start(starts, value)
         if nearest is not None and abs(nearest - value) <= tolerance_s:
             value = nearest
         rewritten.append(min(max(value, 0.0), duration))
