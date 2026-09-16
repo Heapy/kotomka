@@ -45,8 +45,9 @@ def test_score_frames_batches_entire_timeline(tmp_path: Path) -> None:
     )
 
     assert len(llm.batches) == 5
-    assert llm.batches[0][0] == "f-00"
-    assert llm.batches[-1][-1] == "f-49"
+    assert {tuple(batch) for batch in llm.batches} == {
+        tuple(f"f-{index:02d}" for index in range(start, start + 10)) for start in range(0, 50, 10)
+    }
     assert "f-49" in {frame.frame_id for frame in selected}
 
 

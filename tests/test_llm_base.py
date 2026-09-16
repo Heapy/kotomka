@@ -278,7 +278,8 @@ def test_build_report_tolerates_failed_notes_chunk(tmp_path: Path, monkeypatch) 
 
     class FlakyStub(StubJsonLlm):
         def _request_json(self, **kwargs: Any) -> dict[str, Any]:
-            if kwargs["schema_name"] == "chunk_notes" and not self.calls:
+            if (kwargs["schema_name"] == "chunk_notes"
+                    and json.loads(kwargs["text"].split("\n\n")[0])["chunk_index"] == 1):
                 self.calls.append(kwargs)
                 raise RuntimeError("boom")
             return super()._request_json(**kwargs)
