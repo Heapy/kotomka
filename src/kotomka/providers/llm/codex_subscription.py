@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 import json
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import RLock
 from typing import Any
 
 import httpx
@@ -21,6 +23,7 @@ CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
 CODEX_OAUTH_ISSUER = "https://auth.openai.com"
 CODEX_REFRESH_SKEW_SECONDS = 120
+_AUTH_LOCK = RLock()
 
 
 @dataclass(frozen=True)
@@ -223,6 +226,11 @@ def run_codex_device_login() -> Path:
 
 
 def resolve_codex_credentials() -> CodexCredentials:
+    with _AUTH_LOCK:
+        return _resolve_codex_credentials()
+
+
+def _resolve_codex_credentials() -> CodexCredentials:
     store = _load_auth_store()
     tokens = store.get("tokens") if isinstance(store, dict) else None
     if not isinstance(tokens, dict):
@@ -279,15 +287,20 @@ def _load_auth_store() -> dict[str, Any]:
 
 
 def _save_auth_store(data: dict[str, Any]) -> None:
-    path = codex_auth_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
-    try:
-        tmp.chmod(0o600)
-    except OSError:
-        pass
-    tmp.replace(path)
+    with _AUTH_LOCK:
+        path = codex_auth_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", delete=False,
+            ) as handle:
+                temporary_path = Path(handle.name)
+                json.dump(data, handle, indent=2, sort_keys=True)
+            temporary_path.replace(path)
+        finally:
+            if temporary_path is not None:
+                temporary_path.unlink(missing_ok=True)
 
 
 def _utc_now_iso() -> str:

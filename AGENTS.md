@@ -109,6 +109,9 @@ LLM providers:
 - `codex_subscription`: ChatGPT/Codex OAuth route; run `uv run kotomka codex-login`.
   Defaults to `gpt-6-astra` for reports, assessment, and frame scoring;
   `KOTOMKA_CODEX_SCORING_MODEL` can override the scoring model.
+  Credential refresh is serialized across worker threads, with expiry rechecked
+  under the lock. Auth files are atomically replaced using unique private temp
+  files; separate server processes must not share the same auth store.
 
 Provider defaults are configured through `.env.local` and `KOTOMKA_*` settings.
 Do not print secret values in logs, tests, or terminal output.
