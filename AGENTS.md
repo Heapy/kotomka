@@ -141,7 +141,10 @@ LLM providers:
   Defaults to `gpt-6-astra` for reports, assessment, and frame scoring;
   `KOTOMKA_CODEX_SCORING_MODEL` can override the scoring model.
   Credential refresh is serialized across worker threads, with expiry rechecked
-  under the lock. Auth files are atomically replaced using unique private temp
+  under the lock before every request. A 401 triggers one retry with refreshed
+  credentials; a token already rotated by another request is reused. Client
+  credentials and account headers are local to each request. Auth files are
+  atomically replaced using unique private temp
   files; separate server processes must not share the same auth store.
 
 Provider defaults are configured through `.env.local` and `KOTOMKA_*` settings.

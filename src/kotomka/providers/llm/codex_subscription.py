@@ -11,7 +11,7 @@ from threading import RLock
 from typing import Any
 
 import httpx
-from openai import OpenAI
+from openai import AuthenticationError, OpenAI
 
 from ...config import get_settings
 from .json_base import ImageInput, JsonLlmProviderBase, image_data_url
@@ -79,20 +79,31 @@ class CodexSubscriptionProvider(JsonLlmProviderBase):
         for image in images:
             content.append({"type": "input_text", "text": image.label})
             content.append({"type": "input_image", "image_url": image_data_url(image.path), "detail": image_detail})
-        events = self.client.responses.create(
-            model=model or self.model,
-            instructions=instructions,
-            input=[{"role": "user", "content": content}],
-            store=False,
-            reasoning={"effort": "medium", "summary": "auto"},
-            stream=True,
-        )
-        try:
-            return parse_json_object(_consume_output_text(events))
-        finally:
-            close = getattr(events, "close", None)
-            if callable(close):
-                close()
+        creds = resolve_codex_credentials()
+        for attempt in range(2):
+            # Options are request-local; parallel calls share only the HTTP pool.
+            client = self.client.with_options(
+                api_key=creds.access_token, base_url=creds.base_url,
+                set_default_headers=codex_default_headers(creds.access_token),
+            )
+            try:
+                events = client.responses.create(
+                    model=model or self.model,
+                    instructions=instructions,
+                    input=[{"role": "user", "content": content}],
+                    store=False,
+                    reasoning={"effort": "medium", "summary": "auto"},
+                    stream=True,
+                )
+                try:
+                    return parse_json_object(_consume_output_text(events))
+                finally:
+                    events.close()
+            except AuthenticationError:
+                if attempt:
+                    raise
+                creds = resolve_codex_credentials(rejected_access_token=creds.access_token)
+        raise AssertionError("Unreachable authentication retry state")
 
 
 def codex_auth_file() -> Path:
@@ -225,12 +236,12 @@ def run_codex_device_login() -> Path:
     return codex_auth_file()
 
 
-def resolve_codex_credentials() -> CodexCredentials:
+def resolve_codex_credentials(*, rejected_access_token: str | None = None) -> CodexCredentials:
     with _AUTH_LOCK:
-        return _resolve_codex_credentials()
+        return _resolve_codex_credentials(rejected_access_token=rejected_access_token)
 
 
-def _resolve_codex_credentials() -> CodexCredentials:
+def _resolve_codex_credentials(*, rejected_access_token: str | None = None) -> CodexCredentials:
     store = _load_auth_store()
     tokens = store.get("tokens") if isinstance(store, dict) else None
     if not isinstance(tokens, dict):
@@ -239,7 +250,7 @@ def _resolve_codex_credentials() -> CodexCredentials:
     refresh_token = str(tokens.get("refresh_token") or "").strip()
     if not access_token or not refresh_token:
         raise CodexAuthError("Codex subscription auth store is missing tokens. Re-run codex-login.")
-    if _access_token_is_expiring(access_token, CODEX_REFRESH_SKEW_SECONDS):
+    if access_token == rejected_access_token or _access_token_is_expiring(access_token, CODEX_REFRESH_SKEW_SECONDS):
         tokens = _refresh_codex_oauth(refresh_token)
         store["tokens"] = tokens
         store["last_refresh"] = _utc_now_iso()
