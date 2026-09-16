@@ -89,6 +89,8 @@ logged without terminating the worker thread.
 Jobs also have an `is_read` state stored in SQLite. New and retried jobs are
 unread by default. `/jobs` hides read jobs unless `show_read=1` is present, and
 `POST /jobs/{job_id}/read` toggles the state from the list or report page.
+The job list reads titles from the small `source.json` metadata first, falling
+back to `report.json` and then the URL for older or incomplete artifacts.
 
 ## Providers
 

@@ -1,4 +1,7 @@
 from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -23,6 +26,31 @@ def test_jobs_index_renders() -> None:
         response = client.get("/jobs")
     assert response.status_code == 200
     assert "Jobs" in response.text
+
+
+def test_job_title_reads_small_source_metadata_without_opening_the_report(tmp_path, monkeypatch) -> None:
+    test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = test_store.create_job(JobCreate(source_url="https://example.com/v"))
+    write_json(job.artifact_dir / "source.json", {"metadata": {"title": "Video title"}})
+    write_json(job.artifact_dir / "report.json", {"video": {"title": "Video title"}})
+    read = Mock(wraps=app_module.read_json)
+    monkeypatch.setattr(app_module, "read_json", read)
+
+    assert app_module._job_display_title(job) == "Video title"
+    read.assert_called_once_with(job.artifact_dir / "source.json")
+
+
+@pytest.mark.parametrize("source", [None, "invalid json", '{"metadata": {"title": ""}}'])
+def test_job_title_falls_back_to_report_then_url(tmp_path, source) -> None:
+    test_store = JobStore(tmp_path / "app.db", tmp_path / "jobs")
+    job = test_store.create_job(JobCreate(source_url="https://example.com/v"))
+    if source is not None:
+        (job.artifact_dir / "source.json").write_text(source, encoding="utf-8")
+    report_path = job.artifact_dir / "report.json"
+    write_json(report_path, {"video": {"title": "Legacy title"}})
+    assert app_module._job_display_title(job) == "Legacy title"
+    report_path.unlink()
+    assert app_module._job_display_title(job) == job.input.source_url
 
 
 def test_jobs_index_hides_read_jobs_until_requested(tmp_path, monkeypatch) -> None:

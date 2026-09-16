@@ -257,16 +257,11 @@ def _citation_links(text: str, url: str | None) -> Markup:
 
 
 def _job_display_title(job) -> str:
-    report_path = job.artifact_dir / "report.json"
-    if report_path.exists():
+    for filename, metadata_key in [("source.json", "metadata"), ("report.json", "video")]:
         try:
-            return str(read_json(report_path).get("video", {}).get("title") or job.input.source_url)
-        except Exception:
-            pass
-    source_path = job.artifact_dir / "source.json"
-    if source_path.exists():
-        try:
-            return str(read_json(source_path).get("metadata", {}).get("title") or job.input.source_url)
+            title = read_json(job.artifact_dir / filename).get(metadata_key, {}).get("title")
+            if title:
+                return str(title)
         except Exception:
             pass
     return job.input.source_url
