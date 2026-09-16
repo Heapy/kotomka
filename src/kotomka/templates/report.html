@@ -19,7 +19,7 @@
       <form method="post" action="{{ url_for('job_delete', job_id=job.id) }}" onsubmit="return confirm('Delete job {{ job.id }} and its artifacts?')">
         <button class="danger-button" type="submit">Delete</button>
       </form>
-      <a class="primary-button" href="{{ url_for('job_pdf', job_id=job.id) }}?force=1">
+      <a class="primary-button" href="{{ url_for('job_pdf', job_id=job.id) }}">
         <span aria-hidden="true">⬇</span>
         <span>PDF</span>
       </a>

@@ -198,7 +198,8 @@ video. A PDF is published atomically only after full rendering succeeds; renderi
 errors preserve the previous cache and propagate instead of returning a truncated
 placeholder document.
 
-PDF cache is regenerated when missing, smaller than 4 KB, older than `report.json`, or requested with `?force=1`.
+The ordinary PDF button uses the cache. PDF cache is regenerated when missing,
+smaller than 4 KB, older than `report.json`, or explicitly requested with `?force=1`.
 
 ## Commands
 
